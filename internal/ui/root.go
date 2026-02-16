@@ -115,20 +115,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CommentSubmitMsg:
-		line := m.diffViewer.CurrentLine()
-		lineType := git.LineContext
-		snippet := ""
-		if line != nil {
-			lineType = line.Type
-			snippet = line.Content
-		}
 		m.comments.Add(comment.Comment{
 			FilePath:    msg.FilePath,
 			StartLine:   msg.LineNo,
-			EndLine:     msg.LineNo,
-			LineType:    lineType,
+			EndLine:     msg.EndLineNo,
+			LineType:    msg.LineType,
 			Body:        msg.Body,
-			CodeSnippet: snippet,
+			CodeSnippet: msg.CodeSnippet,
 		})
 		m.focus = focusDiffViewer
 		m.updateCommentMarkers()
@@ -250,16 +243,33 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "c":
 		if m.focus == focusDiffViewer {
-			line := m.diffViewer.CurrentLine()
-			if line != nil {
-				lineNo := m.diffViewer.CurrentLineNo()
-				sel := m.fileList.SelectedFile()
-				existing := ""
-				if c := m.comments.Get(sel.Path, lineNo); c != nil {
-					existing = c.Body
+			sel := m.fileList.SelectedFile()
+
+			if m.diffViewer.InVisualMode() {
+				// Range comment from visual selection
+				vStart, vEnd := m.diffViewer.VisualRange()
+				startLineNo := m.diffViewer.LineNoAt(vStart)
+				endLineNo := m.diffViewer.LineNoAt(vEnd)
+				snippet := m.diffViewer.SnippetRange(vStart, vEnd)
+				lineType := git.LineContext
+				if dl := m.diffViewer.lineAt(vStart); dl != nil && dl.line != nil {
+					lineType = dl.line.Type
 				}
-				m.commentInput.Activate(sel.Path, lineNo, existing)
+				m.diffViewer.ExitVisualMode()
+				m.commentInput.Activate(sel.Path, startLineNo, endLineNo, lineType, snippet, "")
 				m.focus = focusCommentInput
+			} else {
+				// Single-line comment
+				line := m.diffViewer.CurrentLine()
+				if line != nil {
+					lineNo := m.diffViewer.CurrentLineNo()
+					existing := ""
+					if c := m.comments.Get(sel.Path, lineNo); c != nil {
+						existing = c.Body
+					}
+					m.commentInput.Activate(sel.Path, lineNo, lineNo, line.Type, line.Content, existing)
+					m.focus = focusCommentInput
+				}
 			}
 		}
 		return m, nil

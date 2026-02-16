@@ -4,6 +4,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/deparker/revui/internal/git"
 )
 
 var commentInputStyle = lipgloss.NewStyle().
@@ -13,9 +15,12 @@ var commentInputStyle = lipgloss.NewStyle().
 
 // CommentSubmitMsg is sent when the user submits a comment.
 type CommentSubmitMsg struct {
-	FilePath string
-	LineNo   int
-	Body     string
+	FilePath    string
+	LineNo      int
+	EndLineNo   int
+	Body        string
+	CodeSnippet string
+	LineType    git.LineType
 }
 
 // CommentCancelMsg is sent when the user cancels comment input.
@@ -23,11 +28,14 @@ type CommentCancelMsg struct{}
 
 // CommentInput is a sub-model for entering review comments.
 type CommentInput struct {
-	input    textinput.Model
-	active   bool
-	filePath string
-	lineNo   int
-	width    int
+	input       textinput.Model
+	active      bool
+	filePath    string
+	lineNo      int
+	endLineNo   int
+	codeSnippet string
+	lineType    git.LineType
+	width       int
 }
 
 // NewCommentInput creates a new comment input component.
@@ -44,10 +52,13 @@ func NewCommentInput(width int) CommentInput {
 }
 
 // Activate shows the input and optionally pre-fills with an existing comment.
-func (ci *CommentInput) Activate(filePath string, lineNo int, existing string) {
+func (ci *CommentInput) Activate(filePath string, lineNo, endLineNo int, lineType git.LineType, snippet, existing string) {
 	ci.active = true
 	ci.filePath = filePath
 	ci.lineNo = lineNo
+	ci.endLineNo = endLineNo
+	ci.lineType = lineType
+	ci.codeSnippet = snippet
 	ci.input.SetValue(existing)
 	ci.input.Focus()
 }
@@ -77,15 +88,15 @@ func (ci CommentInput) Update(msg tea.Msg) (CommentInput, tea.Cmd) {
 			if body == "" {
 				return ci, func() tea.Msg { return CommentCancelMsg{} }
 			}
-			fp := ci.filePath
-			ln := ci.lineNo
-			return ci, func() tea.Msg {
-				return CommentSubmitMsg{
-					FilePath: fp,
-					LineNo:   ln,
-					Body:     body,
-				}
+			submitMsg := CommentSubmitMsg{
+				FilePath:    ci.filePath,
+				LineNo:      ci.lineNo,
+				EndLineNo:   ci.endLineNo,
+				Body:        body,
+				CodeSnippet: ci.codeSnippet,
+				LineType:    ci.lineType,
 			}
+			return ci, func() tea.Msg { return submitMsg }
 		}
 	}
 

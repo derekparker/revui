@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/deparker/revui/internal/git"
 )
 
 func TestCommentInputActivate(t *testing.T) {
@@ -13,7 +15,7 @@ func TestCommentInputActivate(t *testing.T) {
 		t.Error("should not be active initially")
 	}
 
-	ci.Activate("main.go", 10, "")
+	ci.Activate("main.go", 10, 10, git.LineAdded, "code", "")
 	if !ci.Active() {
 		t.Error("should be active after Activate")
 	}
@@ -27,7 +29,7 @@ func TestCommentInputActivate(t *testing.T) {
 
 func TestCommentInputCancel(t *testing.T) {
 	ci := NewCommentInput(80)
-	ci.Activate("main.go", 10, "")
+	ci.Activate("main.go", 10, 10, git.LineContext, "", "")
 
 	ci, _ = ci.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if ci.Active() {
@@ -37,7 +39,7 @@ func TestCommentInputCancel(t *testing.T) {
 
 func TestCommentInputEditExisting(t *testing.T) {
 	ci := NewCommentInput(80)
-	ci.Activate("main.go", 10, "existing comment")
+	ci.Activate("main.go", 10, 10, git.LineContext, "", "existing comment")
 
 	if ci.Value() != "existing comment" {
 		t.Errorf("value = %q, want %q", ci.Value(), "existing comment")

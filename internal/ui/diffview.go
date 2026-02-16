@@ -19,6 +19,7 @@ var (
 	lineNoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(6)
 	cursorStyle      = lipgloss.NewStyle().Bold(true)
 	commentMarker    = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("●")
+	visualSelectStyle = lipgloss.NewStyle().Background(lipgloss.Color("238"))
 )
 
 // diffLine is a flattened line for display, which can be a hunk header or a code line.
@@ -232,9 +233,16 @@ func (dv DiffViewer) View() string {
 		end = len(dv.lines)
 	}
 
+	// Compute visual selection range
+	var vStart, vEnd int
+	if dv.visualMode {
+		vStart, vEnd = dv.VisualRange()
+	}
+
 	for i := dv.offset; i < end; i++ {
 		dl := dv.lines[i]
 		isCursor := i == dv.cursor
+		inVisual := dv.visualMode && i >= vStart && i <= vEnd
 
 		var line string
 		if dl.isHunkHeader {
@@ -243,8 +251,14 @@ func (dv DiffViewer) View() string {
 			line = dv.renderCodeLine(dl, i)
 		}
 
+		if inVisual {
+			line = visualSelectStyle.Render(line)
+		}
+
 		if isCursor {
 			line = cursorStyle.Render("→ ") + line
+		} else if inVisual {
+			line = "▎ " + line
 		} else {
 			line = "  " + line
 		}
@@ -339,6 +353,35 @@ func (dv DiffViewer) lineAt(idx int) *diffLine {
 		return &dv.lines[idx]
 	}
 	return nil
+}
+
+// LineNoAt returns the relevant line number at the given flattened index.
+func (dv DiffViewer) LineNoAt(idx int) int {
+	dl := dv.lineAt(idx)
+	if dl == nil || dl.line == nil {
+		return 0
+	}
+	if dl.line.Type == git.LineRemoved {
+		return dl.line.OldLineNo
+	}
+	return dl.line.NewLineNo
+}
+
+// SnippetRange returns the code snippet text for lines between start and end indices (inclusive).
+func (dv DiffViewer) SnippetRange(start, end int) string {
+	var lines []string
+	for i := start; i <= end; i++ {
+		dl := dv.lineAt(i)
+		if dl != nil && dl.line != nil {
+			lines = append(lines, dl.line.Content)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// ExitVisualMode exits visual mode.
+func (dv *DiffViewer) ExitVisualMode() {
+	dv.visualMode = false
 }
 
 // InVisualMode returns whether visual mode is active.
