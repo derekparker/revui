@@ -276,3 +276,11 @@ func (dv *DiffViewer) SetSize(width, height int) {
 func (dv DiffViewer) TotalLines() int {
 	return len(dv.lines)
 }
+
+// lineAt returns the diffLine at the given index, or nil if out of bounds.
+func (dv DiffViewer) lineAt(idx int) *diffLine {
+	if idx >= 0 && idx < len(dv.lines) {
+		return &dv.lines[idx]
+	}
+	return nil
+}
