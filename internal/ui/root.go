@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -47,6 +48,10 @@ type RootModel struct {
 	finished      bool
 	output        string // formatted comments for clipboard
 	fileListWidth int
+	pendingZ      bool
+	showHelp      bool
+	searchInput   textinput.Model
+	searching     bool
 }
 
 // NewRootModel creates the root model with the given git runner and base branch.
@@ -64,6 +69,11 @@ func NewRootModel(gitRunner GitRunner, base string, width, height int) RootModel
 	dv := NewDiffViewer(width-fileListWidth-3, height-2)
 	ci := NewCommentInput(width)
 
+	si := textinput.New()
+	si.Placeholder = "Search..."
+	si.CharLimit = 100
+	si.Width = width - 10
+
 	// Load the first file's diff if available
 	if len(files) > 0 {
 		if fd, err := gitRunner.FileDiff(base, files[0].Path); err == nil {
@@ -79,6 +89,7 @@ func NewRootModel(gitRunner GitRunner, base string, width, height int) RootModel
 		fileList:      fl,
 		diffViewer:    dv,
 		commentInput:  ci,
+		searchInput:   si,
 		comments:      comment.NewStore(),
 		focus:         focusFileList,
 		width:         width,
@@ -140,6 +151,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// Search input gets priority when active
+		if m.searching {
+			switch msg.Type {
+			case tea.KeyEscape:
+				m.searching = false
+				m.searchInput.Blur()
+				return m, nil
+			case tea.KeyEnter:
+				term := m.searchInput.Value()
+				m.searching = false
+				m.searchInput.Blur()
+				m.diffViewer.SetSearch(term)
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.searchInput, cmd = m.searchInput.Update(msg)
+			return m, cmd
+		}
+
 		return m.handleKeyMsg(msg)
 	}
 
@@ -149,10 +179,44 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	// Help overlay dismissal
+	if m.showHelp {
+		if key == "?" || key == "esc" {
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
+	// ZZ key sequence
+	if key == "Z" {
+		if m.pendingZ {
+			m.pendingZ = false
+			m.output = comment.Format(m.comments.All())
+			m.finished = true
+			return m, tea.Quit
+		}
+		m.pendingZ = true
+		return m, nil
+	}
+	m.pendingZ = false
+
 	switch key {
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
+
+	case "?":
+		m.showHelp = !m.showHelp
+		return m, nil
+
+	case "/":
+		if m.focus == focusDiffViewer {
+			m.searching = true
+			m.searchInput.SetValue("")
+			m.searchInput.Focus()
+			return m, textinput.Blink
+		}
+		return m, nil
 
 	case "ctrl+d":
 		if m.focus == focusDiffViewer {
@@ -264,6 +328,10 @@ func (m RootModel) View() string {
 		return fmt.Sprintf("Error: %v\n\nPress q to quit.", m.err)
 	}
 
+	if m.showHelp {
+		return RenderHelp()
+	}
+
 	var b strings.Builder
 
 	// Header
@@ -294,9 +362,12 @@ func (m RootModel) View() string {
 	b.WriteString(content)
 	b.WriteString("\n")
 
-	// Status bar or comment input
+	// Status bar or overlay input
 	if m.commentInput.Active() {
 		b.WriteString(m.commentInput.View())
+	} else if m.searching {
+		searchBar := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("/") + m.searchInput.View()
+		b.WriteString(searchBar)
 	} else {
 		b.WriteString(m.renderStatusBar())
 	}

@@ -79,3 +79,39 @@ func TestRootViewNotEmpty(t *testing.T) {
 		t.Error("expected non-empty view")
 	}
 }
+
+func TestRootZZFinish(t *testing.T) {
+	m := newTestRoot()
+
+	// First Z — no quit
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+	if cmd != nil {
+		t.Error("first Z should not produce a command")
+	}
+
+	// Second Z — should trigger finish
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+	if !m.Finished() {
+		t.Error("ZZ should trigger finish")
+	}
+}
+
+func TestRootHelpToggle(t *testing.T) {
+	m := newTestRoot()
+
+	// ? shows help
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	m = updated.(RootModel)
+	if !m.showHelp {
+		t.Error("? should show help")
+	}
+
+	// ? again hides help
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	m = updated.(RootModel)
+	if m.showHelp {
+		t.Error("second ? should hide help")
+	}
+}

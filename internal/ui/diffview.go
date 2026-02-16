@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deparker/revui/internal/git"
+	"github.com/deparker/revui/internal/syntax"
 )
 
 var (
@@ -29,23 +30,39 @@ type diffLine struct {
 
 // DiffViewer is a Bubble Tea sub-model for displaying file diffs.
 type DiffViewer struct {
-	diff         *git.FileDiff
-	lines        []diffLine
-	cursor       int
-	offset       int // scroll offset
-	width        int
-	height       int
-	focused      bool
-	commentLines map[int]bool // lines with comments (by flattened index)
+	diff               *git.FileDiff
+	lines              []diffLine
+	cursor             int
+	offset             int // scroll offset
+	width              int
+	height             int
+	focused            bool
+	commentLines       map[int]bool // lines with comments (by flattened index)
+	highlighter        *syntax.Highlighter
+	highlightEnabled   bool
+	visualMode         bool
+	visualStart        int
+	sideBySide         bool
+	searchTerm         string
+	searchMatches      []int
+	searchIdx          int
+	pendingBracket     rune // for ]c / [c sequences
 }
 
 // NewDiffViewer creates a new diff viewer.
 func NewDiffViewer(width, height int) DiffViewer {
 	return DiffViewer{
-		width:        width,
-		height:       height,
-		commentLines: make(map[int]bool),
+		width:            width,
+		height:           height,
+		commentLines:     make(map[int]bool),
+		highlighter:      syntax.NewHighlighter(),
+		highlightEnabled: true,
 	}
+}
+
+// EnableSyntaxHighlighting enables or disables syntax highlighting.
+func (dv *DiffViewer) EnableSyntaxHighlighting(enabled bool) {
+	dv.highlightEnabled = enabled
 }
 
 // SetDiff sets the diff content to display.
@@ -89,7 +106,22 @@ func (dv DiffViewer) Init() tea.Cmd {
 func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := msg.String()
+
+		// Handle pending bracket sequences (]c / [c)
+		if dv.pendingBracket != 0 {
+			if key == "c" {
+				if dv.pendingBracket == ']' {
+					dv.jumpToNextComment()
+				} else {
+					dv.jumpToPrevComment()
+				}
+			}
+			dv.pendingBracket = 0
+			return dv, nil
+		}
+
+		switch key {
 		case "j", "down":
 			if dv.cursor < len(dv.lines)-1 {
 				dv.cursor++
@@ -134,6 +166,25 @@ func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 			dv.jumpToNextHunk()
 		case "{":
 			dv.jumpToPrevHunk()
+		case "v":
+			if dv.visualMode {
+				dv.visualMode = false
+			} else {
+				dv.visualMode = true
+				dv.visualStart = dv.cursor
+			}
+		case "esc":
+			dv.visualMode = false
+		case "tab":
+			dv.sideBySide = !dv.sideBySide
+		case "]":
+			dv.pendingBracket = ']'
+		case "[":
+			dv.pendingBracket = '['
+		case "n":
+			dv.jumpToNextSearch()
+		case "N":
+			dv.jumpToPrevSearch()
 		}
 	}
 	return dv, nil
@@ -223,14 +274,19 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int) string {
 		marker = commentMarker
 	}
 
+	text := l.Content
+	if dv.highlightEnabled && dv.diff != nil {
+		text = dv.highlighter.HighlightLine(dv.diff.Path, l.Content)
+	}
+
 	var content string
 	switch l.Type {
 	case git.LineAdded:
-		content = addedLineStyle.Render("+" + l.Content)
+		content = addedLineStyle.Render("+") + text
 	case git.LineRemoved:
-		content = removedLineStyle.Render("-" + l.Content)
+		content = removedLineStyle.Render("-") + text
 	default:
-		content = contextLineStyle.Render(" " + l.Content)
+		content = " " + text
 	}
 
 	return gutter + marker + " " + content
@@ -283,4 +339,97 @@ func (dv DiffViewer) lineAt(idx int) *diffLine {
 		return &dv.lines[idx]
 	}
 	return nil
+}
+
+// InVisualMode returns whether visual mode is active.
+func (dv DiffViewer) InVisualMode() bool {
+	return dv.visualMode
+}
+
+// VisualRange returns the start and end of the visual selection.
+func (dv DiffViewer) VisualRange() (int, int) {
+	start, end := dv.visualStart, dv.cursor
+	if start > end {
+		start, end = end, start
+	}
+	return start, end
+}
+
+// IsSideBySide returns whether side-by-side mode is active.
+func (dv DiffViewer) IsSideBySide() bool {
+	return dv.sideBySide
+}
+
+// SetSearch sets the search term and computes matches.
+func (dv *DiffViewer) SetSearch(term string) {
+	dv.searchTerm = term
+	dv.searchMatches = nil
+	dv.searchIdx = 0
+	if term == "" {
+		return
+	}
+	for i, dl := range dv.lines {
+		if dl.line != nil && strings.Contains(dl.line.Content, term) {
+			dv.searchMatches = append(dv.searchMatches, i)
+		}
+	}
+}
+
+// SearchMatches returns the indices of lines matching the search term.
+func (dv DiffViewer) SearchMatches() []int {
+	return dv.searchMatches
+}
+
+func (dv *DiffViewer) jumpToNextSearch() {
+	if len(dv.searchMatches) == 0 {
+		return
+	}
+	// Find next match after cursor
+	for _, idx := range dv.searchMatches {
+		if idx > dv.cursor {
+			dv.cursor = idx
+			dv.adjustScroll()
+			return
+		}
+	}
+	// Wrap around
+	dv.cursor = dv.searchMatches[0]
+	dv.adjustScroll()
+}
+
+func (dv *DiffViewer) jumpToPrevSearch() {
+	if len(dv.searchMatches) == 0 {
+		return
+	}
+	// Find previous match before cursor
+	for i := len(dv.searchMatches) - 1; i >= 0; i-- {
+		if dv.searchMatches[i] < dv.cursor {
+			dv.cursor = dv.searchMatches[i]
+			dv.adjustScroll()
+			return
+		}
+	}
+	// Wrap around
+	dv.cursor = dv.searchMatches[len(dv.searchMatches)-1]
+	dv.adjustScroll()
+}
+
+func (dv *DiffViewer) jumpToNextComment() {
+	for i := dv.cursor + 1; i < len(dv.lines); i++ {
+		if dv.commentLines[i] {
+			dv.cursor = i
+			dv.adjustScroll()
+			return
+		}
+	}
+}
+
+func (dv *DiffViewer) jumpToPrevComment() {
+	for i := dv.cursor - 1; i >= 0; i-- {
+		if dv.commentLines[i] {
+			dv.cursor = i
+			dv.adjustScroll()
+			return
+		}
+	}
 }

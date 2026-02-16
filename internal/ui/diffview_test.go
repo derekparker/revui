@@ -78,7 +78,9 @@ func TestDiffViewRenderNotEmpty(t *testing.T) {
 	if view == "" {
 		t.Error("expected non-empty view")
 	}
-	if !strings.Contains(view, "package main") {
+	// Content may include ANSI escape codes from syntax highlighting,
+	// so check for a substring that survives highlighting
+	if !strings.Contains(view, "package") {
 		t.Error("expected view to contain diff content")
 	}
 }
@@ -88,5 +90,99 @@ func TestDiffViewNoDiff(t *testing.T) {
 	view := dv.View()
 	if view == "" {
 		t.Error("expected non-empty view even with no diff")
+	}
+}
+
+func TestDiffViewWithHighlighting(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.EnableSyntaxHighlighting(true)
+	dv.SetDiff(makeTestDiff())
+
+	view := dv.View()
+	if view == "" {
+		t.Error("expected non-empty view with highlighting")
+	}
+}
+
+func TestDiffViewVisualMode(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	// Enter visual mode with v
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'v'}})
+	if !dv.InVisualMode() {
+		t.Error("should be in visual mode after v")
+	}
+
+	// Move down to extend selection
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+
+	start, end := dv.VisualRange()
+	if start != 0 || end != 2 {
+		t.Errorf("range = %d-%d, want 0-2", start, end)
+	}
+
+	// Esc exits visual mode
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	if dv.InVisualMode() {
+		t.Error("should not be in visual mode after Esc")
+	}
+}
+
+func TestDiffViewCommentNavigation(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+	dv.SetCommentLines(map[int]bool{1: true, 4: true})
+
+	// ]c jumps to next comment
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if dv.CursorLine() != 1 {
+		t.Errorf("after ]c: cursor = %d, want 1", dv.CursorLine())
+	}
+
+	// ]c again jumps to index 4
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if dv.CursorLine() != 4 {
+		t.Errorf("after second ]c: cursor = %d, want 4", dv.CursorLine())
+	}
+
+	// [c jumps back to index 1
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if dv.CursorLine() != 1 {
+		t.Errorf("after [c: cursor = %d, want 1", dv.CursorLine())
+	}
+}
+
+func TestDiffViewSearch(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	dv.SetSearch("new line")
+	matches := dv.SearchMatches()
+	if len(matches) == 0 {
+		t.Error("expected search matches")
+	}
+}
+
+func TestDiffViewSideBySideToggle(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	if dv.IsSideBySide() {
+		t.Error("should not be side-by-side initially")
+	}
+
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if !dv.IsSideBySide() {
+		t.Error("should be side-by-side after Tab")
+	}
+
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if dv.IsSideBySide() {
+		t.Error("should not be side-by-side after second Tab")
 	}
 }

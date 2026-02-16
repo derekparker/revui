@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/deparker/revui/internal/git"
@@ -43,6 +44,12 @@ func main() {
 
 	rm := finalModel.(ui.RootModel)
 	if rm.Finished() && rm.Output() != "" {
-		fmt.Print(rm.Output())
+		if err := clipboard.WriteAll(rm.Output()); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not copy to clipboard: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Printing to stdout instead:\n\n")
+			fmt.Print(rm.Output())
+		} else {
+			fmt.Println("Review comments copied to clipboard.")
+		}
 	}
 }
