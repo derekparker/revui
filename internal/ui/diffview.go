@@ -19,7 +19,8 @@ var (
 	lineNoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(6)
 	cursorStyle      = lipgloss.NewStyle().Bold(true)
 	commentMarker    = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("●")
-	visualSelectStyle = lipgloss.NewStyle().Background(lipgloss.Color("238"))
+	visualSelectStyle  = lipgloss.NewStyle().Background(lipgloss.Color("238"))
+	sideSeparatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 // diffLine is a flattened line for display, which can be a hunk header or a code line.
@@ -247,6 +248,8 @@ func (dv DiffViewer) View() string {
 		var line string
 		if dl.isHunkHeader {
 			line = hunkHeaderStyle.Render(dl.hunkHeader)
+		} else if dv.sideBySide {
+			line = dv.renderSideBySideLine(dl, i)
 		} else {
 			line = dv.renderCodeLine(dl, i)
 		}
@@ -304,6 +307,60 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int) string {
 	}
 
 	return gutter + marker + " " + content
+}
+
+func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
+	l := dl.line
+	halfWidth := dv.width / 2
+
+	marker := " "
+	if dv.commentLines[idx] {
+		marker = commentMarker
+	}
+
+	text := l.Content
+	if dv.highlightEnabled && dv.diff != nil {
+		text = dv.highlighter.HighlightLine(dv.diff.Path, l.Content)
+	}
+
+	sep := sideSeparatorStyle.Render("│")
+	lineNoWidth := 6
+	emptyLineNo := strings.Repeat(" ", lineNoWidth)
+
+	padToWidth := func(s string, w int) string {
+		visible := lipgloss.Width(s)
+		if visible < w {
+			return s + strings.Repeat(" ", w-visible)
+		}
+		return s
+	}
+
+	switch l.Type {
+	case git.LineRemoved:
+		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
+		leftGutter := lineNoStyle.Render(oldNo)
+		leftContent := removedLineStyle.Render("-") + text
+		left := padToWidth(leftGutter+leftContent, halfWidth)
+		right := padToWidth(emptyLineNo, halfWidth)
+		return left + marker + sep + right
+
+	case git.LineAdded:
+		left := padToWidth(emptyLineNo, halfWidth)
+		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
+		rightGutter := lineNoStyle.Render(newNo)
+		rightContent := addedLineStyle.Render("+") + text
+		right := padToWidth(rightGutter+rightContent, halfWidth)
+		return left + marker + sep + right
+
+	default: // context
+		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
+		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
+		leftGutter := lineNoStyle.Render(oldNo)
+		left := padToWidth(leftGutter+" "+text, halfWidth)
+		rightGutter := lineNoStyle.Render(newNo)
+		right := padToWidth(rightGutter+" "+text, halfWidth)
+		return left + marker + sep + right
+	}
 }
 
 // CursorLine returns the current cursor position.
