@@ -58,6 +58,22 @@ func (r *Runner) BranchExists(branch string) bool {
 	return err == nil
 }
 
+// DefaultBranch returns the default branch for the given remote by reading
+// the symbolic ref. Falls back to "main" if detection fails.
+func (r *Runner) DefaultBranch(remote string) string {
+	out, err := r.run("symbolic-ref", "refs/remotes/"+remote+"/HEAD")
+	if err != nil {
+		return "main"
+	}
+	// Output is like "refs/remotes/origin/main\n"
+	ref := strings.TrimSpace(out)
+	prefix := "refs/remotes/" + remote + "/"
+	if strings.HasPrefix(ref, prefix) {
+		return strings.TrimPrefix(ref, prefix)
+	}
+	return "main"
+}
+
 func (r *Runner) run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Dir

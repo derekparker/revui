@@ -126,3 +126,31 @@ func TestBranchExists(t *testing.T) {
 		t.Error("expected BranchExists to return false for 'nonexistent-branch'")
 	}
 }
+
+func TestDefaultBranch(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	// No remote configured, so should fall back to "main"
+	branch := r.DefaultBranch("origin")
+	if branch != "main" {
+		t.Errorf("DefaultBranch with no remote = %q, want %q", branch, "main")
+	}
+}
+
+func TestDefaultBranchWithRemote(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	// Create a bare remote and set its HEAD
+	remoteDir := t.TempDir()
+	runCmd(t, remoteDir, "git", "init", "--bare")
+	runCmd(t, dir, "git", "remote", "add", "origin", remoteDir)
+	runCmd(t, dir, "git", "push", "origin", "main")
+	runCmd(t, dir, "git", "remote", "set-head", "origin", "main")
+
+	r := &Runner{Dir: dir}
+	branch := r.DefaultBranch("origin")
+	if branch != "main" {
+		t.Errorf("DefaultBranch = %q, want %q", branch, "main")
+	}
+}

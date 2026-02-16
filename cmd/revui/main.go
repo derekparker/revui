@@ -13,7 +13,8 @@ import (
 )
 
 func main() {
-	base := flag.String("base", "main", "base branch to diff against")
+	base := flag.String("base", "", "base branch to diff against (auto-detected if not set)")
+	remote := flag.String("remote", "origin", "remote to detect default branch from")
 	flag.Parse()
 
 	dir, err := os.Getwd()
@@ -28,12 +29,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !runner.BranchExists(*base) {
-		fmt.Fprintf(os.Stderr, "Error: base branch %q does not exist. Use --base to specify.\n", *base)
+	// Auto-detect base branch if not explicitly provided
+	baseBranch := *base
+	if baseBranch == "" {
+		baseBranch = runner.DefaultBranch(*remote)
+	}
+
+	if !runner.BranchExists(baseBranch) {
+		fmt.Fprintf(os.Stderr, "Error: base branch %q does not exist. Use --base to specify.\n", baseBranch)
 		os.Exit(1)
 	}
 
-	model := ui.NewRootModel(runner, *base, 80, 24)
+	model := ui.NewRootModel(runner, baseBranch, 80, 24)
 
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	finalModel, err := p.Run()
