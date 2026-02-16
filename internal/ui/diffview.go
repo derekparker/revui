@@ -8,13 +8,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/deparker/revui/internal/git"
-	"github.com/deparker/revui/internal/syntax"
 )
 
 var (
-	addedLineStyle   = lipgloss.NewStyle().Background(lipgloss.Color("22"))
-	removedLineStyle = lipgloss.NewStyle().Background(lipgloss.Color("52"))
-	contextLineStyle = lipgloss.NewStyle()
+	addedLineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	removedLineStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	hunkHeaderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Faint(true)
 	lineNoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(6)
 	cursorStyle      = lipgloss.NewStyle().Bold(true)
@@ -46,8 +44,6 @@ type DiffViewer struct {
 	height             int
 	focused            bool
 	commentLines       map[int]bool // lines with comments (by flattened index)
-	highlighter        *syntax.Highlighter
-	highlightEnabled   bool
 	visualMode         bool
 	visualStart        int
 	sideBySide         bool
@@ -64,14 +60,7 @@ func NewDiffViewer(width, height int) DiffViewer {
 		width:            width,
 		height:           height,
 		commentLines:     make(map[int]bool),
-		highlighter:      syntax.NewHighlighter(),
-		highlightEnabled: true,
 	}
-}
-
-// EnableSyntaxHighlighting enables or disables syntax highlighting.
-func (dv *DiffViewer) EnableSyntaxHighlighting(enabled bool) {
-	dv.highlightEnabled = enabled
 }
 
 // SetDiff sets the diff content to display.
@@ -371,19 +360,14 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int) string {
 		marker = commentMarker
 	}
 
-	text := l.Content
-	if dv.highlightEnabled && dv.diff != nil {
-		text = dv.highlighter.HighlightLine(dv.diff.Path, l.Content)
-	}
-
 	var content string
 	switch l.Type {
 	case git.LineAdded:
-		content = addedLineStyle.Render("+") + text
+		content = addedLineStyle.Render("+" + l.Content)
 	case git.LineRemoved:
-		content = removedLineStyle.Render("-") + text
+		content = removedLineStyle.Render("-" + l.Content)
 	default:
-		content = " " + text
+		content = " " + l.Content
 	}
 
 	return gutter + marker + " " + content
@@ -396,11 +380,6 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
 	marker := " "
 	if dv.commentLines[idx] {
 		marker = commentMarker
-	}
-
-	text := l.Content
-	if dv.highlightEnabled && dv.diff != nil {
-		text = dv.highlighter.HighlightLine(dv.diff.Path, l.Content)
 	}
 
 	sep := sideSeparatorStyle.Render("│")
@@ -419,7 +398,7 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
 	case git.LineRemoved:
 		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
 		leftGutter := lineNoStyle.Render(oldNo)
-		leftContent := removedLineStyle.Render("-") + text
+		leftContent := removedLineStyle.Render("-" + l.Content)
 		left := padToWidth(leftGutter+leftContent, halfWidth)
 		right := padToWidth(emptyLineNo, halfWidth)
 		return left + marker + sep + right
@@ -428,7 +407,7 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
 		left := padToWidth(emptyLineNo, halfWidth)
 		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
 		rightGutter := lineNoStyle.Render(newNo)
-		rightContent := addedLineStyle.Render("+") + text
+		rightContent := addedLineStyle.Render("+" + l.Content)
 		right := padToWidth(rightGutter+rightContent, halfWidth)
 		return left + marker + sep + right
 
@@ -436,9 +415,9 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
 		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
 		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
 		leftGutter := lineNoStyle.Render(oldNo)
-		left := padToWidth(leftGutter+" "+text, halfWidth)
+		left := padToWidth(leftGutter+" "+l.Content, halfWidth)
 		rightGutter := lineNoStyle.Render(newNo)
-		right := padToWidth(rightGutter+" "+text, halfWidth)
+		right := padToWidth(rightGutter+" "+l.Content, halfWidth)
 		return left + marker + sep + right
 	}
 }

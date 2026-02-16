@@ -78,8 +78,7 @@ func TestDiffViewRenderNotEmpty(t *testing.T) {
 	if view == "" {
 		t.Error("expected non-empty view")
 	}
-	// Content may include ANSI escape codes from syntax highlighting,
-	// so check for a substring that survives highlighting
+	// Check that the diff content appears in the rendered view
 	if !strings.Contains(view, "package") {
 		t.Error("expected view to contain diff content")
 	}
@@ -90,17 +89,6 @@ func TestDiffViewNoDiff(t *testing.T) {
 	view := dv.View()
 	if view == "" {
 		t.Error("expected non-empty view even with no diff")
-	}
-}
-
-func TestDiffViewWithHighlighting(t *testing.T) {
-	dv := NewDiffViewer(80, 20)
-	dv.EnableSyntaxHighlighting(true)
-	dv.SetDiff(makeTestDiff())
-
-	view := dv.View()
-	if view == "" {
-		t.Error("expected non-empty view with highlighting")
 	}
 }
 
