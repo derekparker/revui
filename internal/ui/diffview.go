@@ -49,6 +49,7 @@ type DiffViewer struct {
 	searchMatches      []int
 	searchIdx          int
 	pendingBracket     rune // for ]c / [c sequences
+	preBracketCursor   int  // cursor position before bracket hunk jump
 }
 
 // NewDiffViewer creates a new diff viewer.
@@ -113,14 +114,18 @@ func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 		// Handle pending bracket sequences (]c / [c)
 		if dv.pendingBracket != 0 {
 			if key == "c" {
+				// Restore cursor to pre-bracket position for comment navigation
+				dv.cursor = dv.preBracketCursor
 				if dv.pendingBracket == ']' {
 					dv.jumpToNextComment()
 				} else {
 					dv.jumpToPrevComment()
 				}
+				dv.pendingBracket = 0
+				return dv, nil
 			}
+			// Not 'c' — clear pending bracket and fall through to process key normally
 			dv.pendingBracket = 0
-			return dv, nil
 		}
 
 		switch key {
@@ -180,8 +185,12 @@ func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 		case "tab":
 			dv.sideBySide = !dv.sideBySide
 		case "]":
+			dv.preBracketCursor = dv.cursor
+			dv.jumpToNextChange()
 			dv.pendingBracket = ']'
 		case "[":
+			dv.preBracketCursor = dv.cursor
+			dv.jumpToPrevChange()
 			dv.pendingBracket = '['
 		case "n":
 			dv.jumpToNextSearch()
@@ -218,6 +227,47 @@ func (dv *DiffViewer) jumpToPrevHunk() {
 			dv.adjustScroll()
 			return
 		}
+	}
+}
+
+func (dv *DiffViewer) isChangedLine(i int) bool {
+	dl := dv.lines[i]
+	return dl.line != nil && (dl.line.Type == git.LineAdded || dl.line.Type == git.LineRemoved)
+}
+
+func (dv *DiffViewer) jumpToNextChange() {
+	i := dv.cursor
+	// If currently on a changed line, skip past the current change block
+	for i < len(dv.lines) && dv.isChangedLine(i) {
+		i++
+	}
+	// Skip past context/headers to find the start of the next change block
+	for i < len(dv.lines) && !dv.isChangedLine(i) {
+		i++
+	}
+	if i < len(dv.lines) {
+		dv.cursor = i
+		dv.adjustScroll()
+	}
+}
+
+func (dv *DiffViewer) jumpToPrevChange() {
+	i := dv.cursor
+	// If currently on a changed line, move back one to leave this block
+	if i > 0 && dv.isChangedLine(i) {
+		i--
+	}
+	// Skip past context/headers to find the end of the previous change block
+	for i >= 0 && !dv.isChangedLine(i) {
+		i--
+	}
+	// Now on the last line of a change block; skip to its start
+	for i > 0 && dv.isChangedLine(i-1) {
+		i--
+	}
+	if i >= 0 && dv.isChangedLine(i) {
+		dv.cursor = i
+		dv.adjustScroll()
 	}
 }
 

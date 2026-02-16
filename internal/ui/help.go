@@ -19,6 +19,7 @@ func RenderHelp() string {
 		"  gg          Jump to top\n" +
 		"  Ctrl+d/u    Half-page down/up\n" +
 		"  Ctrl+f/b    Full-page down/up\n" +
+		"  [/]         Jump to prev/next change\n" +
 		"  {/}         Jump to prev/next hunk\n" +
 		"\n" +
 		"Commenting\n" +
