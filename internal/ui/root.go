@@ -131,6 +131,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = focusDiffViewer
 		return m, nil
 
+	case navigateFileMsg:
+		var switched bool
+		if msg.direction > 0 {
+			switched = m.fileList.SelectNext()
+		} else {
+			switched = m.fileList.SelectPrev()
+		}
+		if switched {
+			sel := m.fileList.SelectedFile()
+			if fd, err := m.git.FileDiff(m.base, sel.Path); err == nil {
+				m.diffViewer.SetDiff(fd)
+				if msg.direction < 0 {
+					m.diffViewer.SetCursorToEnd()
+				}
+				m.updateCommentMarkers()
+			}
+		}
+		return m, nil
+
 	case finishMsg:
 		m.output = comment.Format(m.comments.All())
 		m.finished = true

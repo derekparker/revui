@@ -96,6 +96,24 @@ func (fl FileList) SelectedIndex() int {
 	return fl.cursor
 }
 
+// SelectNext moves the cursor to the next file. Returns false if already at the last file.
+func (fl *FileList) SelectNext() bool {
+	if fl.cursor >= len(fl.files)-1 {
+		return false
+	}
+	fl.cursor++
+	return true
+}
+
+// SelectPrev moves the cursor to the previous file. Returns false if already at the first file.
+func (fl *FileList) SelectPrev() bool {
+	if fl.cursor <= 0 {
+		return false
+	}
+	fl.cursor--
+	return true
+}
+
 // SetFocused sets whether this component has focus.
 func (fl *FileList) SetFocused(focused bool) {
 	fl.focused = focused

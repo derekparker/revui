@@ -23,6 +23,12 @@ var (
 	sideSeparatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
+// navigateFileMsg signals that the diff viewer has hit a boundary and wants to
+// navigate to the next or previous file.
+type navigateFileMsg struct {
+	direction int // +1 for next, -1 for prev
+}
+
 // diffLine is a flattened line for display, which can be a hunk header or a code line.
 type diffLine struct {
 	isHunkHeader bool
@@ -74,6 +80,14 @@ func (dv *DiffViewer) SetDiff(fd *git.FileDiff) {
 	dv.cursor = 0
 	dv.offset = 0
 	dv.lines = dv.flattenLines()
+}
+
+// SetCursorToEnd positions the cursor at the last line and scrolls to show it.
+func (dv *DiffViewer) SetCursorToEnd() {
+	if len(dv.lines) > 0 {
+		dv.cursor = len(dv.lines) - 1
+		dv.adjustScroll()
+	}
 }
 
 // SetCommentLines updates which lines have comments.
@@ -170,9 +184,13 @@ func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 			}
 			dv.adjustScroll()
 		case "}":
-			dv.jumpToNextHunk()
+			if !dv.jumpToNextHunk() {
+				return dv, func() tea.Msg { return navigateFileMsg{direction: 1} }
+			}
 		case "{":
-			dv.jumpToPrevHunk()
+			if !dv.jumpToPrevHunk() {
+				return dv, func() tea.Msg { return navigateFileMsg{direction: -1} }
+			}
 		case "v":
 			if dv.visualMode {
 				dv.visualMode = false
@@ -186,11 +204,17 @@ func (dv DiffViewer) Update(msg tea.Msg) (DiffViewer, tea.Cmd) {
 			dv.sideBySide = !dv.sideBySide
 		case "]":
 			dv.preBracketCursor = dv.cursor
-			dv.jumpToNextChange()
+			if !dv.jumpToNextChange() {
+				dv.pendingBracket = ']'
+				return dv, func() tea.Msg { return navigateFileMsg{direction: 1} }
+			}
 			dv.pendingBracket = ']'
 		case "[":
 			dv.preBracketCursor = dv.cursor
-			dv.jumpToPrevChange()
+			if !dv.jumpToPrevChange() {
+				dv.pendingBracket = '['
+				return dv, func() tea.Msg { return navigateFileMsg{direction: -1} }
+			}
 			dv.pendingBracket = '['
 		case "n":
 			dv.jumpToNextSearch()
@@ -210,24 +234,26 @@ func (dv *DiffViewer) adjustScroll() {
 	}
 }
 
-func (dv *DiffViewer) jumpToNextHunk() {
+func (dv *DiffViewer) jumpToNextHunk() bool {
 	for i := dv.cursor + 1; i < len(dv.lines); i++ {
 		if dv.lines[i].isHunkHeader {
 			dv.cursor = i
 			dv.adjustScroll()
-			return
+			return true
 		}
 	}
+	return false
 }
 
-func (dv *DiffViewer) jumpToPrevHunk() {
+func (dv *DiffViewer) jumpToPrevHunk() bool {
 	for i := dv.cursor - 1; i >= 0; i-- {
 		if dv.lines[i].isHunkHeader {
 			dv.cursor = i
 			dv.adjustScroll()
-			return
+			return true
 		}
 	}
+	return false
 }
 
 func (dv *DiffViewer) isChangedLine(i int) bool {
@@ -235,7 +261,7 @@ func (dv *DiffViewer) isChangedLine(i int) bool {
 	return dl.line != nil && (dl.line.Type == git.LineAdded || dl.line.Type == git.LineRemoved)
 }
 
-func (dv *DiffViewer) jumpToNextChange() {
+func (dv *DiffViewer) jumpToNextChange() bool {
 	i := dv.cursor
 	// If currently on a changed line, skip past the current change block
 	for i < len(dv.lines) && dv.isChangedLine(i) {
@@ -248,10 +274,12 @@ func (dv *DiffViewer) jumpToNextChange() {
 	if i < len(dv.lines) {
 		dv.cursor = i
 		dv.adjustScroll()
+		return true
 	}
+	return false
 }
 
-func (dv *DiffViewer) jumpToPrevChange() {
+func (dv *DiffViewer) jumpToPrevChange() bool {
 	i := dv.cursor
 	// If currently on a changed line, move back one to leave this block
 	if i > 0 && dv.isChangedLine(i) {
@@ -268,7 +296,9 @@ func (dv *DiffViewer) jumpToPrevChange() {
 	if i >= 0 && dv.isChangedLine(i) {
 		dv.cursor = i
 		dv.adjustScroll()
+		return true
 	}
+	return false
 }
 
 // View renders the diff.
