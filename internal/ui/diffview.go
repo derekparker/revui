@@ -11,12 +11,13 @@ import (
 )
 
 var (
-	addedLineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	removedLineStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	hunkHeaderStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Faint(true)
-	lineNoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(6)
-	cursorStyle      = lipgloss.NewStyle().Bold(true)
-	commentMarker    = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("●")
+	addedLineStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	removedLineStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	hunkHeaderStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Faint(true)
+	lineNoStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Width(6)
+	cursorStyle        = lipgloss.NewStyle().Bold(true)
+	cursorLineBg       = lipgloss.Color("236")
+	commentMarkerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	visualSelectStyle  = lipgloss.NewStyle().Background(lipgloss.Color("238"))
 	sideSeparatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
@@ -316,11 +317,15 @@ func (dv DiffViewer) View() string {
 
 		var line string
 		if dl.isHunkHeader {
-			line = hunkHeaderStyle.Render(dl.hunkHeader)
+			if isCursor {
+				line = hunkHeaderStyle.Background(cursorLineBg).Render(dl.hunkHeader)
+			} else {
+				line = hunkHeaderStyle.Render(dl.hunkHeader)
+			}
 		} else if dv.sideBySide {
-			line = dv.renderSideBySideLine(dl, i)
+			line = dv.renderSideBySideLine(dl, i, isCursor)
 		} else {
-			line = dv.renderCodeLine(dl, i)
+			line = dv.renderCodeLine(dl, i, isCursor)
 		}
 
 		if inVisual {
@@ -328,7 +333,13 @@ func (dv DiffViewer) View() string {
 		}
 
 		if isCursor {
-			line = cursorStyle.Render("→ ") + line
+			arrow := cursorStyle.Background(cursorLineBg).Render("→ ")
+			line = arrow + line
+			// Pad to full terminal width
+			visible := lipgloss.Width(line)
+			if visible < dv.width {
+				line += lipgloss.NewStyle().Background(cursorLineBg).Render(strings.Repeat(" ", dv.width-visible))
+			}
 		} else if inVisual {
 			line = "▎ " + line
 		} else {
@@ -342,8 +353,20 @@ func (dv DiffViewer) View() string {
 	return b.String()
 }
 
-func (dv DiffViewer) renderCodeLine(dl diffLine, idx int) string {
+func (dv DiffViewer) renderCodeLine(dl diffLine, idx int, highlight bool) string {
 	l := dl.line
+
+	lnStyle := lineNoStyle
+	addStyle := addedLineStyle
+	rmStyle := removedLineStyle
+	bgStyle := lipgloss.NewStyle()
+	if highlight {
+		lnStyle = lnStyle.Background(cursorLineBg)
+		addStyle = addStyle.Background(cursorLineBg)
+		rmStyle = rmStyle.Background(cursorLineBg)
+		bgStyle = bgStyle.Background(cursorLineBg)
+	}
+
 	oldNo := "     "
 	newNo := "     "
 	if l.OldLineNo > 0 {
@@ -353,43 +376,68 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int) string {
 		newNo = fmt.Sprintf("%4d ", l.NewLineNo)
 	}
 
-	gutter := lineNoStyle.Render(oldNo) + lineNoStyle.Render(newNo)
+	gutter := lnStyle.Render(oldNo) + lnStyle.Render(newNo)
 
 	marker := " "
 	if dv.commentLines[idx] {
-		marker = commentMarker
+		mStyle := commentMarkerStyle
+		if highlight {
+			mStyle = mStyle.Background(cursorLineBg)
+		}
+		marker = mStyle.Render("●")
 	}
 
 	var content string
 	switch l.Type {
 	case git.LineAdded:
-		content = addedLineStyle.Render("+" + l.Content)
+		content = addStyle.Render("+" + l.Content)
 	case git.LineRemoved:
-		content = removedLineStyle.Render("-" + l.Content)
+		content = rmStyle.Render("-" + l.Content)
 	default:
-		content = " " + l.Content
+		content = bgStyle.Render(" " + l.Content)
 	}
 
-	return gutter + marker + " " + content
+	return gutter + bgStyle.Render(marker+" ") + content
 }
 
-func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
+func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int, highlight bool) string {
 	l := dl.line
 	halfWidth := dv.width / 2
 
-	marker := " "
-	if dv.commentLines[idx] {
-		marker = commentMarker
+	lnStyle := lineNoStyle
+	addStyle := addedLineStyle
+	rmStyle := removedLineStyle
+	sepStyle := sideSeparatorStyle
+	bgStyle := lipgloss.NewStyle()
+	if highlight {
+		lnStyle = lnStyle.Background(cursorLineBg)
+		addStyle = addStyle.Background(cursorLineBg)
+		rmStyle = rmStyle.Background(cursorLineBg)
+		sepStyle = sepStyle.Background(cursorLineBg)
+		bgStyle = bgStyle.Background(cursorLineBg)
 	}
 
-	sep := sideSeparatorStyle.Render("│")
+	marker := " "
+	if dv.commentLines[idx] {
+		mStyle := commentMarkerStyle
+		if highlight {
+			mStyle = mStyle.Background(cursorLineBg)
+		}
+		marker = mStyle.Render("●")
+	}
+
+	sep := sepStyle.Render("│")
 	lineNoWidth := 6
 	emptyLineNo := strings.Repeat(" ", lineNoWidth)
 
 	padToWidth := func(s string, w int) string {
 		visible := lipgloss.Width(s)
 		if visible < w {
-			return s + strings.Repeat(" ", w-visible)
+			pad := strings.Repeat(" ", w-visible)
+			if highlight {
+				return s + bgStyle.Render(pad)
+			}
+			return s + pad
 		}
 		return s
 	}
@@ -397,28 +445,28 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int) string {
 	switch l.Type {
 	case git.LineRemoved:
 		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
-		leftGutter := lineNoStyle.Render(oldNo)
-		leftContent := removedLineStyle.Render("-" + l.Content)
+		leftGutter := lnStyle.Render(oldNo)
+		leftContent := rmStyle.Render("-" + l.Content)
 		left := padToWidth(leftGutter+leftContent, halfWidth)
-		right := padToWidth(emptyLineNo, halfWidth)
-		return left + marker + sep + right
+		right := padToWidth(bgStyle.Render(emptyLineNo), halfWidth)
+		return left + bgStyle.Render(marker+" ") + sep + right
 
 	case git.LineAdded:
-		left := padToWidth(emptyLineNo, halfWidth)
+		left := padToWidth(bgStyle.Render(emptyLineNo), halfWidth)
 		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
-		rightGutter := lineNoStyle.Render(newNo)
-		rightContent := addedLineStyle.Render("+" + l.Content)
+		rightGutter := lnStyle.Render(newNo)
+		rightContent := addStyle.Render("+" + l.Content)
 		right := padToWidth(rightGutter+rightContent, halfWidth)
-		return left + marker + sep + right
+		return left + bgStyle.Render(marker+" ") + sep + right
 
 	default: // context
 		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
 		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
-		leftGutter := lineNoStyle.Render(oldNo)
-		left := padToWidth(leftGutter+" "+l.Content, halfWidth)
-		rightGutter := lineNoStyle.Render(newNo)
-		right := padToWidth(rightGutter+" "+l.Content, halfWidth)
-		return left + marker + sep + right
+		leftGutter := lnStyle.Render(oldNo)
+		left := padToWidth(leftGutter+bgStyle.Render(" "+l.Content), halfWidth)
+		rightGutter := lnStyle.Render(newNo)
+		right := padToWidth(rightGutter+bgStyle.Render(" "+l.Content), halfWidth)
+		return left + bgStyle.Render(marker+" ") + sep + right
 	}
 }
 

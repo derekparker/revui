@@ -156,6 +156,39 @@ func TestDiffViewSearch(t *testing.T) {
 	}
 }
 
+func TestDiffViewCursorLineHighlight(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	// Cursor starts at line 0 (hunk header)
+	view := dv.View()
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+
+	// The cursor line (first line) should have the → prefix
+	if !strings.Contains(lines[0], "→") {
+		t.Error("cursor line should contain → prefix")
+	}
+
+	// Non-cursor lines should NOT have the → prefix
+	for i := 1; i < len(lines); i++ {
+		if strings.Contains(lines[i], "→") {
+			t.Errorf("non-cursor line %d should not contain → prefix", i)
+		}
+	}
+
+	// Move cursor down and verify the highlight follows
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	view = dv.View()
+	lines = strings.Split(strings.TrimRight(view, "\n"), "\n")
+
+	if strings.Contains(lines[0], "→") {
+		t.Error("line 0 should no longer have → after cursor moved")
+	}
+	if !strings.Contains(lines[1], "→") {
+		t.Error("line 1 should have → after cursor moved down")
+	}
+}
+
 func TestDiffViewSideBySideToggle(t *testing.T) {
 	dv := NewDiffViewer(80, 20)
 	dv.SetDiff(makeTestDiff())
