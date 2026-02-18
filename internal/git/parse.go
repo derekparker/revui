@@ -22,7 +22,7 @@ func ParseDiff(raw string) ([]FileDiff, error) {
 
 	var current *FileDiff
 
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		line := lines[i]
 
 		// Match diff --git header to start a new file diff.
@@ -161,7 +161,7 @@ func ParseNameStatus(raw string) []ChangedFile {
 	}
 
 	var files []ChangedFile
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

@@ -68,8 +68,8 @@ func (r *Runner) DefaultBranch(remote string) string {
 	// Output is like "refs/remotes/origin/main\n"
 	ref := strings.TrimSpace(out)
 	prefix := "refs/remotes/" + remote + "/"
-	if strings.HasPrefix(ref, prefix) {
-		return strings.TrimPrefix(ref, prefix)
+	if after, ok := strings.CutPrefix(ref, prefix); ok {
+		return after
 	}
 	return "main"
 }

@@ -326,10 +326,7 @@ func (dv DiffViewer) View() string {
 		return "No diff to display. Select a file."
 	}
 
-	end := dv.offset + dv.height
-	if end > len(dv.lines) {
-		end = len(dv.lines)
-	}
+	end := min(dv.offset+dv.height, len(dv.lines))
 	visibleLines := end - dv.offset
 
 	var b strings.Builder
