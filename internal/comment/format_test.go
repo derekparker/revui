@@ -107,3 +107,16 @@ func TestStoreGetByFileLine(t *testing.T) {
 		t.Error("expected nil for non-existent line")
 	}
 }
+
+func BenchmarkFormat(b *testing.B) {
+	comments := []Comment{
+		{FilePath: "a.go", StartLine: 1, EndLine: 1, LineType: git.LineAdded, Body: "first comment", CodeSnippet: "func foo() {}"},
+		{FilePath: "a.go", StartLine: 10, EndLine: 15, LineType: git.LineRemoved, Body: "second comment", CodeSnippet: "old code"},
+		{FilePath: "b.go", StartLine: 5, EndLine: 5, LineType: git.LineContext, Body: "third comment", CodeSnippet: "some code"},
+		{FilePath: "c.go", StartLine: 20, EndLine: 20, LineType: git.LineAdded, Body: "fourth comment", CodeSnippet: "new code"},
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		Format(comments)
+	}
+}

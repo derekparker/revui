@@ -184,3 +184,15 @@ func TestParseDiffEmpty(t *testing.T) {
 		t.Errorf("got %d diffs from empty input, want 0", len(diffs))
 	}
 }
+
+func BenchmarkParseDiff(b *testing.B) {
+	raw, err := os.ReadFile("testdata/simple.diff")
+	if err != nil {
+		b.Fatalf("reading test fixture: %v", err)
+	}
+	input := string(raw)
+	b.ResetTimer()
+	for b.Loop() {
+		ParseDiff(input)
+	}
+}

@@ -207,3 +207,41 @@ func TestDiffViewSideBySideToggle(t *testing.T) {
 		t.Error("should not be side-by-side after second Tab")
 	}
 }
+
+func BenchmarkRenderCodeLine(b *testing.B) {
+	dv := NewDiffViewer(120, 40)
+	dv.SetDiff(makeTestDiff())
+	dl := dv.lines[1] // first code line (context)
+	b.ResetTimer()
+	for b.Loop() {
+		dv.renderCodeLine(dl, 1, false)
+	}
+}
+
+func BenchmarkRenderSideBySideLine(b *testing.B) {
+	dv := NewDiffViewer(120, 40)
+	dv.SetDiff(makeTestDiff())
+	dl := dv.lines[1]
+	b.ResetTimer()
+	for b.Loop() {
+		dv.renderSideBySideLine(dl, 1, false)
+	}
+}
+
+func BenchmarkFlattenLines(b *testing.B) {
+	dv := NewDiffViewer(120, 40)
+	dv.diff = makeTestDiff()
+	b.ResetTimer()
+	for b.Loop() {
+		dv.flattenLines()
+	}
+}
+
+func BenchmarkView(b *testing.B) {
+	dv := NewDiffViewer(120, 40)
+	dv.SetDiff(makeTestDiff())
+	b.ResetTimer()
+	for b.Loop() {
+		dv.View()
+	}
+}

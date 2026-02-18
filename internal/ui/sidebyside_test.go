@@ -69,3 +69,17 @@ func TestSideBySideOnlyRemoved(t *testing.T) {
 		t.Error("first pair should have nil Right for removed-only line")
 	}
 }
+
+func BenchmarkBuildSideBySidePairs(b *testing.B) {
+	lines := []git.Line{
+		{Content: "context1", Type: git.LineContext, OldLineNo: 1, NewLineNo: 1},
+		{Content: "old line", Type: git.LineRemoved, OldLineNo: 2},
+		{Content: "new line", Type: git.LineAdded, NewLineNo: 2},
+		{Content: "another new", Type: git.LineAdded, NewLineNo: 3},
+		{Content: "context2", Type: git.LineContext, OldLineNo: 3, NewLineNo: 4},
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		BuildSideBySidePairs(lines)
+	}
+}
