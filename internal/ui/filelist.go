@@ -23,7 +23,6 @@ type FileList struct {
 	cursor  int
 	width   int
 	height  int
-	focused bool
 }
 
 // NewFileList creates a new file list with the given changed files.
@@ -115,11 +114,6 @@ func (fl *FileList) SelectPrev() bool {
 	}
 	fl.cursor--
 	return true
-}
-
-// SetFocused sets whether this component has focus.
-func (fl *FileList) SetFocused(focused bool) {
-	fl.focused = focused
 }
 
 // SetSize updates the dimensions.

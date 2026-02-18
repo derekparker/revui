@@ -49,7 +49,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	rm := finalModel.(ui.RootModel)
+	rm, ok := finalModel.(ui.RootModel)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Error: unexpected model type\n")
+		os.Exit(1)
+	}
 	if rm.Finished() && rm.Output() != "" {
 		if err := clipboard.WriteAll(rm.Output()); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not copy to clipboard: %v\n", err)

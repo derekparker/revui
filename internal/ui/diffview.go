@@ -69,14 +69,12 @@ type DiffViewer struct {
 	offset           int // scroll offset
 	width            int
 	height           int
-	focused          bool
 	commentLines     map[int]bool // lines with comments (by flattened index)
 	visualMode       bool
 	visualStart      int
 	sideBySide       bool
 	searchTerm       string
 	searchMatches    []int
-	searchIdx        int
 	pendingBracket   rune // for ]c / [c sequences
 	preBracketCursor int  // cursor position before bracket hunk jump
 }
@@ -573,11 +571,6 @@ func (dv DiffViewer) CurrentLineNo() int {
 	return l.NewLineNo
 }
 
-// SetFocused sets whether this component has focus.
-func (dv *DiffViewer) SetFocused(focused bool) {
-	dv.focused = focused
-}
-
 // SetSize updates the dimensions.
 func (dv *DiffViewer) SetSize(width, height int) {
 	dv.width = width
@@ -649,7 +642,6 @@ func (dv DiffViewer) IsSideBySide() bool {
 func (dv *DiffViewer) SetSearch(term string) {
 	dv.searchTerm = term
 	dv.searchMatches = nil
-	dv.searchIdx = 0
 	if term == "" {
 		return
 	}
