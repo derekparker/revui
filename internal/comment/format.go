@@ -1,7 +1,7 @@
 package comment
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -22,21 +22,32 @@ func Format(comments []Comment) string {
 	}
 
 	var b strings.Builder
+	// Estimate capacity: header + per-file sections
+	b.Grow(256 * len(comments))
 	b.WriteString("## Code Review Comments\n\n")
 
 	for i, file := range fileOrder {
-		b.WriteString(fmt.Sprintf("### %s\n\n", file))
+		b.WriteString("### ")
+		b.WriteString(file)
+		b.WriteString("\n\n")
 
 		for _, c := range grouped[file] {
-			lineInfo := formatLineInfo(c)
-			b.WriteString(fmt.Sprintf("**%s:**\n", lineInfo))
+			b.WriteString("**")
+			writeLineInfo(&b, c)
+			b.WriteString(":**\n")
 
 			if c.CodeSnippet != "" {
 				ext := fileExtension(file)
-				b.WriteString(fmt.Sprintf("```%s\n%s\n```\n", ext, c.CodeSnippet))
+				b.WriteString("```")
+				b.WriteString(ext)
+				b.WriteByte('\n')
+				b.WriteString(c.CodeSnippet)
+				b.WriteString("\n```\n")
 			}
 
-			b.WriteString(fmt.Sprintf("**Comment:** %s\n\n", c.Body))
+			b.WriteString("**Comment:** ")
+			b.WriteString(c.Body)
+			b.WriteString("\n\n")
 		}
 
 		if i < len(fileOrder)-1 {
@@ -47,21 +58,31 @@ func Format(comments []Comment) string {
 	return b.String()
 }
 
-func formatLineInfo(c Comment) string {
-	lineType := ""
-	if c.LineType.String() != "context" {
-		lineType = fmt.Sprintf(" (%s)", c.LineType.String())
-	}
+// writeLineInfo writes the line info directly to a builder, avoiding intermediate string allocation.
+func writeLineInfo(b *strings.Builder, c Comment) {
+	lineType := c.LineType.String()
+
 	if c.StartLine == c.EndLine || c.EndLine == 0 {
-		return fmt.Sprintf("Line %d%s", c.StartLine, lineType)
+		b.WriteString("Line ")
+		b.WriteString(strconv.Itoa(c.StartLine))
+	} else {
+		b.WriteString("Lines ")
+		b.WriteString(strconv.Itoa(c.StartLine))
+		b.WriteByte('-')
+		b.WriteString(strconv.Itoa(c.EndLine))
 	}
-	return fmt.Sprintf("Lines %d-%d%s", c.StartLine, c.EndLine, lineType)
+
+	if lineType != "context" {
+		b.WriteString(" (")
+		b.WriteString(lineType)
+		b.WriteByte(')')
+	}
 }
 
 func fileExtension(path string) string {
-	parts := strings.Split(path, ".")
-	if len(parts) > 1 {
-		return parts[len(parts)-1]
+	idx := strings.LastIndexByte(path, '.')
+	if idx >= 0 {
+		return path[idx+1:]
 	}
 	return ""
 }

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,6 +21,33 @@ var (
 	sideSeparatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
+// emptyStyle is a reusable zero-value style to avoid allocating lipgloss.NewStyle() per call.
+var emptyStyle = lipgloss.NewStyle()
+
+// formatLineNo formats a line number right-aligned in a 4-char field followed by a space.
+// Returns "     " (5 spaces) for lineNo <= 0.
+func formatLineNo(lineNo int) string {
+	if lineNo <= 0 {
+		return "     "
+	}
+	var buf [5]byte
+	buf[4] = ' '
+	// Format the number right-aligned in positions 0-3
+	n := lineNo
+	i := 3
+	for n > 0 && i >= 0 {
+		buf[i] = byte('0' + n%10)
+		n /= 10
+		i--
+	}
+	// Fill remaining positions with spaces
+	for i >= 0 {
+		buf[i] = ' '
+		i--
+	}
+	return string(buf[:])
+}
+
 // navigateFileMsg signals that the diff viewer has hit a boundary and wants to
 // navigate to the next or previous file.
 type navigateFileMsg struct {
@@ -37,30 +63,30 @@ type diffLine struct {
 
 // DiffViewer is a Bubble Tea sub-model for displaying file diffs.
 type DiffViewer struct {
-	diff               *git.FileDiff
-	lines              []diffLine
-	cursor             int
-	offset             int // scroll offset
-	width              int
-	height             int
-	focused            bool
-	commentLines       map[int]bool // lines with comments (by flattened index)
-	visualMode         bool
-	visualStart        int
-	sideBySide         bool
-	searchTerm         string
-	searchMatches      []int
-	searchIdx          int
-	pendingBracket     rune // for ]c / [c sequences
-	preBracketCursor   int  // cursor position before bracket hunk jump
+	diff             *git.FileDiff
+	lines            []diffLine
+	cursor           int
+	offset           int // scroll offset
+	width            int
+	height           int
+	focused          bool
+	commentLines     map[int]bool // lines with comments (by flattened index)
+	visualMode       bool
+	visualStart      int
+	sideBySide       bool
+	searchTerm       string
+	searchMatches    []int
+	searchIdx        int
+	pendingBracket   rune // for ]c / [c sequences
+	preBracketCursor int  // cursor position before bracket hunk jump
 }
 
 // NewDiffViewer creates a new diff viewer.
 func NewDiffViewer(width, height int) DiffViewer {
 	return DiffViewer{
-		width:            width,
-		height:           height,
-		commentLines:     make(map[int]bool),
+		width:        width,
+		height:       height,
+		commentLines: make(map[int]bool),
 	}
 }
 
@@ -89,7 +115,12 @@ func (dv *DiffViewer) flattenLines() []diffLine {
 	if dv.diff == nil {
 		return nil
 	}
-	var result []diffLine
+	// Pre-compute total capacity: one header per hunk plus all lines
+	total := 0
+	for _, h := range dv.diff.Hunks {
+		total += 1 + len(h.Lines)
+	}
+	result := make([]diffLine, 0, total)
 	for _, h := range dv.diff.Hunks {
 		result = append(result, diffLine{
 			isHunkHeader: true,
@@ -297,18 +328,25 @@ func (dv DiffViewer) View() string {
 		return "No diff to display. Select a file."
 	}
 
-	var b strings.Builder
-
 	end := dv.offset + dv.height
 	if end > len(dv.lines) {
 		end = len(dv.lines)
 	}
+	visibleLines := end - dv.offset
+
+	var b strings.Builder
+	// Estimate ~200 bytes per line for pre-allocation
+	b.Grow(visibleLines * 200)
 
 	// Compute visual selection range
 	var vStart, vEnd int
 	if dv.visualMode {
 		vStart, vEnd = dv.VisualRange()
 	}
+
+	// Pre-render the cursor arrow once (used at most once per frame)
+	cursorArrowStyle := cursorStyle.Background(cursorLineBg)
+	cursorBgStyle := emptyStyle.Background(cursorLineBg)
 
 	for i := dv.offset; i < end; i++ {
 		dl := dv.lines[i]
@@ -333,12 +371,12 @@ func (dv DiffViewer) View() string {
 		}
 
 		if isCursor {
-			arrow := cursorStyle.Background(cursorLineBg).Render("→ ")
+			arrow := cursorArrowStyle.Render("→ ")
 			line = arrow + line
 			// Pad to full terminal width
 			visible := lipgloss.Width(line)
 			if visible < dv.width {
-				line += lipgloss.NewStyle().Background(cursorLineBg).Render(strings.Repeat(" ", dv.width-visible))
+				line += cursorBgStyle.Render(strings.Repeat(" ", dv.width-visible))
 			}
 		} else if inVisual {
 			line = "▎ " + line
@@ -347,7 +385,7 @@ func (dv DiffViewer) View() string {
 		}
 
 		b.WriteString(line)
-		b.WriteString("\n")
+		b.WriteByte('\n')
 	}
 
 	return b.String()
@@ -359,32 +397,35 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int, highlight bool) string
 	lnStyle := lineNoStyle
 	addStyle := addedLineStyle
 	rmStyle := removedLineStyle
-	bgStyle := lipgloss.NewStyle()
 	if highlight {
 		lnStyle = lnStyle.Background(cursorLineBg)
 		addStyle = addStyle.Background(cursorLineBg)
 		rmStyle = rmStyle.Background(cursorLineBg)
-		bgStyle = bgStyle.Background(cursorLineBg)
 	}
 
-	oldNo := "     "
-	newNo := "     "
-	if l.OldLineNo > 0 {
-		oldNo = fmt.Sprintf("%4d ", l.OldLineNo)
-	}
-	if l.NewLineNo > 0 {
-		newNo = fmt.Sprintf("%4d ", l.NewLineNo)
-	}
-
+	oldNo := formatLineNo(l.OldLineNo)
+	newNo := formatLineNo(l.NewLineNo)
 	gutter := lnStyle.Render(oldNo) + lnStyle.Render(newNo)
 
-	marker := " "
+	var marker string
 	if dv.commentLines[idx] {
 		mStyle := commentMarkerStyle
 		if highlight {
 			mStyle = mStyle.Background(cursorLineBg)
 		}
-		marker = mStyle.Render("●")
+		if highlight {
+			bgStyle := emptyStyle.Background(cursorLineBg)
+			marker = bgStyle.Render(mStyle.Render("●") + " ")
+		} else {
+			marker = mStyle.Render("●") + " "
+		}
+	} else {
+		if highlight {
+			bgStyle := emptyStyle.Background(cursorLineBg)
+			marker = bgStyle.Render("  ")
+		} else {
+			marker = "  "
+		}
 	}
 
 	var content string
@@ -394,11 +435,19 @@ func (dv DiffViewer) renderCodeLine(dl diffLine, idx int, highlight bool) string
 	case git.LineRemoved:
 		content = rmStyle.Render("-" + l.Content)
 	default:
-		content = bgStyle.Render(" " + l.Content)
+		if highlight {
+			bgStyle := emptyStyle.Background(cursorLineBg)
+			content = bgStyle.Render(" " + l.Content)
+		} else {
+			content = " " + l.Content
+		}
 	}
 
-	return gutter + bgStyle.Render(marker+" ") + content
+	return gutter + marker + content
 }
+
+// emptyLineNoPad is a pre-computed string of spaces for empty line number gutters.
+const emptyLineNoPad = "      " // 6 spaces
 
 func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int, highlight bool) string {
 	l := dl.line
@@ -408,33 +457,40 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int, highlight bool) 
 	addStyle := addedLineStyle
 	rmStyle := removedLineStyle
 	sepStyle := sideSeparatorStyle
-	bgStyle := lipgloss.NewStyle()
 	if highlight {
 		lnStyle = lnStyle.Background(cursorLineBg)
 		addStyle = addStyle.Background(cursorLineBg)
 		rmStyle = rmStyle.Background(cursorLineBg)
 		sepStyle = sepStyle.Background(cursorLineBg)
-		bgStyle = bgStyle.Background(cursorLineBg)
 	}
 
-	marker := " "
+	var markerSection string
 	if dv.commentLines[idx] {
 		mStyle := commentMarkerStyle
 		if highlight {
 			mStyle = mStyle.Background(cursorLineBg)
+			bgStyle := emptyStyle.Background(cursorLineBg)
+			markerSection = bgStyle.Render(mStyle.Render("●") + " ")
+		} else {
+			markerSection = mStyle.Render("●") + " "
 		}
-		marker = mStyle.Render("●")
+	} else {
+		if highlight {
+			bgStyle := emptyStyle.Background(cursorLineBg)
+			markerSection = bgStyle.Render("  ")
+		} else {
+			markerSection = "  "
+		}
 	}
 
 	sep := sepStyle.Render("│")
-	lineNoWidth := 6
-	emptyLineNo := strings.Repeat(" ", lineNoWidth)
 
 	padToWidth := func(s string, w int) string {
 		visible := lipgloss.Width(s)
 		if visible < w {
 			pad := strings.Repeat(" ", w-visible)
 			if highlight {
+				bgStyle := emptyStyle.Background(cursorLineBg)
 				return s + bgStyle.Render(pad)
 			}
 			return s + pad
@@ -442,32 +498,54 @@ func (dv DiffViewer) renderSideBySideLine(dl diffLine, idx int, highlight bool) 
 		return s
 	}
 
+	var b strings.Builder
+	b.Grow(256)
+
+	// renderBg applies background styling only when highlight is active.
+	renderBg := func(s string) string {
+		if highlight {
+			return emptyStyle.Background(cursorLineBg).Render(s)
+		}
+		return s
+	}
+
 	switch l.Type {
 	case git.LineRemoved:
-		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
+		oldNo := formatLineNo(l.OldLineNo)
 		leftGutter := lnStyle.Render(oldNo)
 		leftContent := rmStyle.Render("-" + l.Content)
 		left := padToWidth(leftGutter+leftContent, halfWidth)
-		right := padToWidth(bgStyle.Render(emptyLineNo), halfWidth)
-		return left + bgStyle.Render(marker+" ") + sep + right
+		right := padToWidth(renderBg(emptyLineNoPad), halfWidth)
+		b.WriteString(left)
+		b.WriteString(markerSection)
+		b.WriteString(sep)
+		b.WriteString(right)
 
 	case git.LineAdded:
-		left := padToWidth(bgStyle.Render(emptyLineNo), halfWidth)
-		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
+		left := padToWidth(renderBg(emptyLineNoPad), halfWidth)
+		newNo := formatLineNo(l.NewLineNo)
 		rightGutter := lnStyle.Render(newNo)
 		rightContent := addStyle.Render("+" + l.Content)
 		right := padToWidth(rightGutter+rightContent, halfWidth)
-		return left + bgStyle.Render(marker+" ") + sep + right
+		b.WriteString(left)
+		b.WriteString(markerSection)
+		b.WriteString(sep)
+		b.WriteString(right)
 
 	default: // context
-		oldNo := fmt.Sprintf("%4d ", l.OldLineNo)
-		newNo := fmt.Sprintf("%4d ", l.NewLineNo)
+		oldNo := formatLineNo(l.OldLineNo)
+		newNo := formatLineNo(l.NewLineNo)
 		leftGutter := lnStyle.Render(oldNo)
-		left := padToWidth(leftGutter+bgStyle.Render(" "+l.Content), halfWidth)
+		left := padToWidth(leftGutter+renderBg(" "+l.Content), halfWidth)
 		rightGutter := lnStyle.Render(newNo)
-		right := padToWidth(rightGutter+bgStyle.Render(" "+l.Content), halfWidth)
-		return left + bgStyle.Render(marker+" ") + sep + right
+		right := padToWidth(rightGutter+renderBg(" "+l.Content), halfWidth)
+		b.WriteString(left)
+		b.WriteString(markerSection)
+		b.WriteString(sep)
+		b.WriteString(right)
 	}
+
+	return b.String()
 }
 
 // CursorLine returns the current cursor position.
