@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -68,7 +70,7 @@ func (fl FileList) View() string {
 		return "No changed files"
 	}
 
-	var s string
+	var b strings.Builder
 	for i, f := range fl.files {
 		icon := statusIcon(f.Status)
 		line := icon + " " + f.Path
@@ -78,9 +80,10 @@ func (fl FileList) View() string {
 		} else {
 			line = unselectedStyle.Render("  " + line)
 		}
-		s += line + "\n"
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
-	return s
+	return b.String()
 }
 
 // SelectedFile returns the currently selected file.
