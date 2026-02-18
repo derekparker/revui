@@ -12,35 +12,56 @@ type Comment struct {
 	CodeSnippet string
 }
 
+type commentKey struct {
+	filePath  string
+	startLine int
+}
+
 // Store holds comments in memory.
 type Store struct {
 	comments []Comment
+	byKey    map[commentKey]int // maps key to index in comments slice
 }
 
 func NewStore() *Store {
-	return &Store{}
+	return &Store{
+		byKey: make(map[commentKey]int),
+	}
 }
 
 func (s *Store) Add(c Comment) {
+	key := commentKey{c.FilePath, c.StartLine}
+	if idx, ok := s.byKey[key]; ok {
+		s.comments[idx] = c
+		return
+	}
+	s.byKey[key] = len(s.comments)
 	s.comments = append(s.comments, c)
 }
 
 func (s *Store) Delete(filePath string, startLine int) {
-	for i, c := range s.comments {
-		if c.FilePath == filePath && c.StartLine == startLine {
-			s.comments = append(s.comments[:i], s.comments[i+1:]...)
-			return
-		}
+	key := commentKey{filePath, startLine}
+	idx, ok := s.byKey[key]
+	if !ok {
+		return
 	}
+	last := len(s.comments) - 1
+	if idx != last {
+		s.comments[idx] = s.comments[last]
+		movedKey := commentKey{s.comments[idx].FilePath, s.comments[idx].StartLine}
+		s.byKey[movedKey] = idx
+	}
+	s.comments = s.comments[:last]
+	delete(s.byKey, key)
 }
 
 func (s *Store) Get(filePath string, line int) *Comment {
-	for i := range s.comments {
-		if s.comments[i].FilePath == filePath && s.comments[i].StartLine == line {
-			return &s.comments[i]
-		}
+	key := commentKey{filePath, line}
+	idx, ok := s.byKey[key]
+	if !ok {
+		return nil
 	}
-	return nil
+	return &s.comments[idx]
 }
 
 func (s *Store) All() []Comment {
@@ -58,5 +79,6 @@ func (s *Store) ForFile(filePath string) []Comment {
 }
 
 func (s *Store) HasComment(filePath string, line int) bool {
-	return s.Get(filePath, line) != nil
+	_, ok := s.byKey[commentKey{filePath, line}]
+	return ok
 }
