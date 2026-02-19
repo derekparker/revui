@@ -322,6 +322,9 @@ func (dv *DiffViewer) jumpToPrevChange() bool {
 
 // View renders the diff.
 func (dv DiffViewer) View() string {
+	if dv.diff != nil && dv.diff.Status == "B" {
+		return "Binary file — cannot display diff"
+	}
 	if dv.diff == nil || len(dv.lines) == 0 {
 		return "No diff to display. Select a file."
 	}

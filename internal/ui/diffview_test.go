@@ -208,6 +208,16 @@ func TestDiffViewSideBySideToggle(t *testing.T) {
 	}
 }
 
+func TestDiffViewBinaryPlaceholder(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(&git.FileDiff{Path: "image.png", Status: "B"})
+
+	view := dv.View()
+	if !strings.Contains(view, "Binary file") {
+		t.Error("expected binary file placeholder message")
+	}
+}
+
 func BenchmarkRenderCodeLine(b *testing.B) {
 	dv := NewDiffViewer(120, 40)
 	dv.SetDiff(makeTestDiff())

@@ -132,6 +132,8 @@ func statusIcon(status string) string {
 		return statusDeletedStyle.Render("D")
 	case "R":
 		return statusModifiedStyle.Render("R")
+	case "B":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render("B")
 	default:
 		return "?"
 	}
