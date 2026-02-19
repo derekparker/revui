@@ -29,18 +29,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Auto-detect base branch if not explicitly provided
-	baseBranch := *base
-	if baseBranch == "" {
-		baseBranch = runner.DefaultBranch(*remote)
-	}
+	var model ui.RootModel
+	if runner.HasUncommittedChanges() {
+		model = ui.NewRootModelUncommitted(runner, 80, 24)
+	} else {
+		// Auto-detect base branch if not explicitly provided
+		baseBranch := *base
+		if baseBranch == "" {
+			baseBranch = runner.DefaultBranch(*remote)
+		}
 
-	if !runner.BranchExists(baseBranch) {
-		fmt.Fprintf(os.Stderr, "Error: base branch %q does not exist. Use --base to specify.\n", baseBranch)
-		os.Exit(1)
-	}
+		if !runner.BranchExists(baseBranch) {
+			fmt.Fprintf(os.Stderr, "Error: base branch %q does not exist. Use --base to specify.\n", baseBranch)
+			os.Exit(1)
+		}
 
-	model := ui.NewRootModel(runner, baseBranch, 80, 24)
+		model = ui.NewRootModel(runner, baseBranch, 80, 24)
+	}
 
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	finalModel, err := p.Run()
