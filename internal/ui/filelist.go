@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	selectedStyle         = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	selectedStyle          = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
 	selectedUnfocusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	unselectedStyle       = lipgloss.NewStyle()
-	statusAddedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	statusModifiedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	statusDeletedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	statusBinaryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	unselectedStyle        = lipgloss.NewStyle()
+	statusAddedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	statusModifiedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	statusDeletedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	statusBinaryStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
 // FileList is a Bubble Tea sub-model for displaying changed files.
@@ -127,6 +127,38 @@ func (fl *FileList) SelectPrev() bool {
 func (fl *FileList) SetSize(width, height int) {
 	fl.width = width
 	fl.height = height
+}
+
+// SetFiles updates the file list, preserving the cursor on the same file path
+// if it still exists. If the selected file was removed, the cursor clamps to
+// the nearest valid index.
+func (fl *FileList) SetFiles(files []git.ChangedFile) {
+	if len(files) == 0 {
+		fl.files = files
+		fl.cursor = 0
+		return
+	}
+
+	// Try to find the currently selected file path in the new list
+	selectedPath := ""
+	if fl.cursor >= 0 && fl.cursor < len(fl.files) {
+		selectedPath = fl.files[fl.cursor].Path
+	}
+
+	fl.files = files
+
+	// Look for the same path in the new list
+	for i, f := range fl.files {
+		if f.Path == selectedPath {
+			fl.cursor = i
+			return
+		}
+	}
+
+	// File not found — clamp cursor
+	if fl.cursor >= len(fl.files) {
+		fl.cursor = len(fl.files) - 1
+	}
 }
 
 func statusIcon(status string) string {

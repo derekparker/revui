@@ -23,7 +23,7 @@ const (
 type reviewMode int
 
 const (
-	modeBranch      reviewMode = iota
+	modeBranch reviewMode = iota
 	modeUncommitted
 )
 
