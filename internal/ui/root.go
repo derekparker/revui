@@ -445,6 +445,10 @@ func (m RootModel) View() string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
+	// Set focus state for sub-models
+	m.fileList.focused = m.focus == focusFileList
+	m.diffViewer.focused = m.focus == focusDiffViewer
+
 	// File list panel
 	fileListPanel := lipgloss.NewStyle().
 		Width(m.fileListWidth).

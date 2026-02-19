@@ -10,18 +10,20 @@ import (
 )
 
 var (
-	selectedStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	unselectedStyle     = lipgloss.NewStyle()
-	statusAddedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	statusModifiedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	statusDeletedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	statusBinaryStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	selectedStyle         = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	selectedUnfocusedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	unselectedStyle       = lipgloss.NewStyle()
+	statusAddedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	statusModifiedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	statusDeletedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	statusBinaryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
 // FileList is a Bubble Tea sub-model for displaying changed files.
 type FileList struct {
 	files   []git.ChangedFile
 	cursor  int
+	focused bool
 	width   int
 	height  int
 }
@@ -76,7 +78,11 @@ func (fl FileList) View() string {
 		line := icon + " " + f.Path
 
 		if i == fl.cursor {
-			line = selectedStyle.Render("▸ " + line)
+			if fl.focused {
+				line = selectedStyle.Render("▸ " + line)
+			} else {
+				line = selectedUnfocusedStyle.Render("▸ " + line)
+			}
 		} else {
 			line = unselectedStyle.Render("  " + line)
 		}

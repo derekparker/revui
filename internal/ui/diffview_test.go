@@ -158,6 +158,7 @@ func TestDiffViewSearch(t *testing.T) {
 
 func TestDiffViewCursorLineHighlight(t *testing.T) {
 	dv := NewDiffViewer(80, 20)
+	dv.focused = true
 	dv.SetDiff(makeTestDiff())
 
 	// Cursor starts at line 0 (hunk header)

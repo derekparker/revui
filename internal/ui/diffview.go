@@ -69,6 +69,7 @@ type DiffViewer struct {
 	offset           int // scroll offset
 	width            int
 	height           int
+	focused          bool
 	commentLines     map[int]bool // lines with comments (by flattened index)
 	visualMode       bool
 	visualStart      int
@@ -348,7 +349,7 @@ func (dv DiffViewer) View() string {
 
 	for i := dv.offset; i < end; i++ {
 		dl := dv.lines[i]
-		isCursor := i == dv.cursor
+		isCursor := dv.focused && i == dv.cursor
 		inVisual := dv.visualMode && i >= vStart && i <= vEnd
 
 		var line string
