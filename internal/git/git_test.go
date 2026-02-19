@@ -138,6 +138,44 @@ func TestDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestHasUncommittedChanges(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	// Repo is clean after setupTestRepo (all committed)
+	if r.HasUncommittedChanges() {
+		t.Error("expected no uncommitted changes in clean repo")
+	}
+
+	// Create an unstaged change
+	if err := os.WriteFile(filepath.Join(dir, "hello.go"), []byte("package main\n\nfunc hello() { /* modified */ }\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !r.HasUncommittedChanges() {
+		t.Error("expected uncommitted changes after modifying a file")
+	}
+
+	// Stage the change - still uncommitted
+	runCmd(t, dir, "git", "add", "hello.go")
+	if !r.HasUncommittedChanges() {
+		t.Error("expected uncommitted changes after staging")
+	}
+
+	// Commit - now clean again
+	runCmd(t, dir, "git", "commit", "-m", "fix")
+	if r.HasUncommittedChanges() {
+		t.Error("expected no uncommitted changes after commit")
+	}
+
+	// Untracked file counts too
+	if err := os.WriteFile(filepath.Join(dir, "newfile.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !r.HasUncommittedChanges() {
+		t.Error("expected uncommitted changes with untracked file")
+	}
+}
+
 func TestDefaultBranchWithRemote(t *testing.T) {
 	dir := setupTestRepo(t)
 

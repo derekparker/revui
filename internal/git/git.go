@@ -74,6 +74,15 @@ func (r *Runner) DefaultBranch(remote string) string {
 	return "main"
 }
 
+// HasUncommittedChanges returns true if there are staged, unstaged, or untracked changes.
+func (r *Runner) HasUncommittedChanges() bool {
+	out, err := r.run("status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}
+
 func (r *Runner) run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Dir
