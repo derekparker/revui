@@ -20,11 +20,21 @@ const (
 	focusCommentInput
 )
 
+type reviewMode int
+
+const (
+	modeBranch      reviewMode = iota
+	modeUncommitted
+)
+
 // GitRunner is the interface for git operations, enabling testing with mocks.
 type GitRunner interface {
 	ChangedFiles(base string) ([]git.ChangedFile, error)
 	FileDiff(base, path string) (*git.FileDiff, error)
 	CurrentBranch() (string, error)
+	HasUncommittedChanges() bool
+	UncommittedFiles() ([]git.ChangedFile, error)
+	UncommittedFileDiff(path string) (*git.FileDiff, error)
 }
 
 // finishMsg signals the review is done and comments should be copied.
@@ -33,6 +43,7 @@ type finishMsg struct{}
 // RootModel is the top-level Bubble Tea model.
 type RootModel struct {
 	git           GitRunner
+	mode          reviewMode
 	base          string
 	branch        string
 	files         []git.ChangedFile

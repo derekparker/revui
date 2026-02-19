@@ -28,6 +28,21 @@ func (m *mockGitRunner) CurrentBranch() (string, error) {
 	return "feature", nil
 }
 
+func (m *mockGitRunner) HasUncommittedChanges() bool {
+	return false
+}
+
+func (m *mockGitRunner) UncommittedFiles() ([]git.ChangedFile, error) {
+	return m.files, nil
+}
+
+func (m *mockGitRunner) UncommittedFileDiff(path string) (*git.FileDiff, error) {
+	if d, ok := m.diffs[path]; ok {
+		return d, nil
+	}
+	return &git.FileDiff{Path: path}, nil
+}
+
 func newTestRoot() RootModel {
 	mock := &mockGitRunner{
 		files: []git.ChangedFile{
