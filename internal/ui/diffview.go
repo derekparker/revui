@@ -97,6 +97,35 @@ func (dv *DiffViewer) SetDiff(fd *git.FileDiff) {
 	dv.lines = dv.flattenLines()
 }
 
+// RefreshDiff updates the diff content while preserving cursor and scroll position.
+// Cursor and scroll offset are clamped if the new diff is shorter.
+// Visual mode, search matches, and pending bracket state are cleared since the
+// underlying line indices are no longer valid after a refresh.
+func (dv *DiffViewer) RefreshDiff(fd *git.FileDiff) {
+	dv.diff = fd
+	dv.lines = dv.flattenLines()
+	dv.visualMode = false
+	dv.searchMatches = nil
+	dv.pendingBracket = 0
+
+	if len(dv.lines) == 0 {
+		dv.cursor = 0
+		dv.offset = 0
+		return
+	}
+
+	// Clamp cursor
+	if dv.cursor >= len(dv.lines) {
+		dv.cursor = len(dv.lines) - 1
+	}
+
+	// Clamp scroll offset
+	if dv.offset >= len(dv.lines) {
+		dv.offset = len(dv.lines) - 1
+	}
+	dv.adjustScroll()
+}
+
 // SetCursorToEnd positions the cursor at the last line and scrolls to show it.
 func (dv *DiffViewer) SetCursorToEnd() {
 	if len(dv.lines) > 0 {

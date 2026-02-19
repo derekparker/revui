@@ -256,3 +256,53 @@ func BenchmarkView(b *testing.B) {
 		dv.View()
 	}
 }
+
+func TestDiffViewRefreshDiff(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	// Scroll down a few lines
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	savedCursor := dv.CursorLine()
+
+	t.Run("preserves cursor position", func(t *testing.T) {
+		dv2 := dv // copy
+		dv2.RefreshDiff(makeTestDiff())
+		if dv2.CursorLine() != savedCursor {
+			t.Errorf("cursor = %d, want %d", dv2.CursorLine(), savedCursor)
+		}
+	})
+
+	t.Run("clamps cursor when diff shrinks", func(t *testing.T) {
+		dv2 := dv // copy
+		shortDiff := &git.FileDiff{
+			Path:   "test.go",
+			Status: "M",
+			Hunks: []git.Hunk{
+				{
+					Header:   "@@ -1,1 +1,1 @@",
+					OldStart: 1, OldCount: 1,
+					NewStart: 1, NewCount: 1,
+					Lines: []git.Line{
+						{Content: "only line", Type: git.LineContext, OldLineNo: 1, NewLineNo: 1},
+					},
+				},
+			},
+		}
+		dv2.RefreshDiff(shortDiff)
+		// 1 hunk header + 1 line = 2 lines total, max cursor = 1
+		if dv2.CursorLine() != 1 {
+			t.Errorf("cursor = %d, want 1 (clamped to last line)", dv2.CursorLine())
+		}
+	})
+
+	t.Run("handles nil diff", func(t *testing.T) {
+		dv2 := dv // copy
+		dv2.RefreshDiff(nil)
+		if dv2.CursorLine() != 0 {
+			t.Errorf("cursor = %d, want 0 for nil diff", dv2.CursorLine())
+		}
+	})
+}
