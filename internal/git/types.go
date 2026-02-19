@@ -31,6 +31,8 @@ func FileStatusString(status string) string {
 		return "deleted"
 	case "R":
 		return "renamed"
+	case "B":
+		return "binary"
 	default:
 		return "unknown"
 	}
@@ -57,7 +59,7 @@ type Hunk struct {
 // FileDiff represents the diff for a single file.
 type FileDiff struct {
 	Path   string
-	Status string // A, M, D, R
+	Status string // A, M, D, R, B
 	Hunks  []Hunk
 }
 
