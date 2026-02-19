@@ -109,6 +109,47 @@ func NewRootModel(gitRunner GitRunner, base string, width, height int) RootModel
 	}
 }
 
+// NewRootModelUncommitted creates the root model for reviewing uncommitted changes.
+func NewRootModelUncommitted(gitRunner GitRunner, width, height int) RootModel {
+	fileListWidth := 30
+
+	files, err := gitRunner.UncommittedFiles()
+	if err != nil {
+		return RootModel{err: err}
+	}
+
+	fl := NewFileList(files, fileListWidth, height-2)
+	dv := NewDiffViewer(width-fileListWidth-3, height-2)
+	ci := NewCommentInput(width)
+
+	si := textinput.New()
+	si.Placeholder = "Search..."
+	si.CharLimit = 100
+	si.Width = width - 10
+
+	// Load the first file's diff if available
+	if len(files) > 0 {
+		if fd, err := gitRunner.UncommittedFileDiff(files[0].Path); err == nil {
+			dv.SetDiff(fd)
+		}
+	}
+
+	return RootModel{
+		git:           gitRunner,
+		mode:          modeUncommitted,
+		files:         files,
+		fileList:      fl,
+		diffViewer:    dv,
+		commentInput:  ci,
+		searchInput:   si,
+		comments:      comment.NewStore(),
+		focus:         focusFileList,
+		width:         width,
+		height:        height,
+		fileListWidth: fileListWidth,
+	}
+}
+
 // Init returns the initial command.
 func (m RootModel) Init() tea.Cmd {
 	return nil
@@ -151,7 +192,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if switched {
 			sel := m.fileList.SelectedFile()
-			if fd, err := m.git.FileDiff(m.base, sel.Path); err == nil {
+			if fd, err := m.loadFileDiff(sel.Path); err == nil {
 				m.diffViewer.SetDiff(fd)
 				if msg.direction < 0 {
 					m.diffViewer.SetCursorToEnd()
@@ -264,7 +305,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusDiffViewer
 			// Load diff for selected file
 			sel := m.fileList.SelectedFile()
-			if fd, err := m.git.FileDiff(m.base, sel.Path); err == nil {
+			if fd, err := m.loadFileDiff(sel.Path); err == nil {
 				m.diffViewer.SetDiff(fd)
 				m.updateCommentMarkers()
 			}
@@ -322,7 +363,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Auto-load diff when selection changes
 		if key == "j" || key == "k" || key == "G" || key == "g" {
 			sel := m.fileList.SelectedFile()
-			if fd, err := m.git.FileDiff(m.base, sel.Path); err == nil {
+			if fd, err := m.loadFileDiff(sel.Path); err == nil {
 				m.diffViewer.SetDiff(fd)
 				m.updateCommentMarkers()
 			}
@@ -362,6 +403,14 @@ func (m *RootModel) updateCommentMarkers() {
 	m.diffViewer.SetCommentLines(markers)
 }
 
+// loadFileDiff loads the diff for the given path based on the current review mode.
+func (m *RootModel) loadFileDiff(path string) (*git.FileDiff, error) {
+	if m.mode == modeUncommitted {
+		return m.git.UncommittedFileDiff(path)
+	}
+	return m.git.FileDiff(m.base, path)
+}
+
 // View renders the full UI.
 func (m RootModel) View() string {
 	if m.err != nil {
@@ -375,10 +424,16 @@ func (m RootModel) View() string {
 	var b strings.Builder
 
 	// Header
+	var headerText string
+	if m.mode == modeUncommitted {
+		headerText = " revui — uncommitted changes "
+	} else {
+		headerText = fmt.Sprintf(" revui — %s → %s ", m.base, m.branch)
+	}
 	header := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("12")).
-		Render(fmt.Sprintf(" revui — %s → %s ", m.base, m.branch))
+		Render(headerText)
 	b.WriteString(header)
 	b.WriteString("\n")
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -128,5 +129,35 @@ func TestRootHelpToggle(t *testing.T) {
 	m = updated.(RootModel)
 	if m.showHelp {
 		t.Error("second ? should hide help")
+	}
+}
+
+func newTestRootUncommitted() RootModel {
+	mock := &mockGitRunner{
+		files: []git.ChangedFile{
+			{Path: "main.go", Status: "M"},
+			{Path: "newfile.go", Status: "A"},
+			{Path: "image.png", Status: "B"},
+		},
+		diffs: map[string]*git.FileDiff{
+			"main.go":   makeTestDiff(),
+			"image.png": {Path: "image.png", Status: "B"},
+		},
+	}
+	return NewRootModelUncommitted(mock, 80, 24)
+}
+
+func TestRootUncommittedHeader(t *testing.T) {
+	m := newTestRootUncommitted()
+	view := m.View()
+	if !strings.Contains(view, "uncommitted changes") {
+		t.Error("expected header to contain 'uncommitted changes'")
+	}
+}
+
+func TestRootUncommittedFileList(t *testing.T) {
+	m := newTestRootUncommitted()
+	if len(m.files) != 3 {
+		t.Errorf("expected 3 files, got %d", len(m.files))
 	}
 }
