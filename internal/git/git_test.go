@@ -176,6 +176,62 @@ func TestHasUncommittedChanges(t *testing.T) {
 	}
 }
 
+func TestUncommittedFiles(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	// Modify a tracked file (unstaged)
+	if err := os.WriteFile(filepath.Join(dir, "hello.go"), []byte("package main\n\nfunc hello() { /* changed */ }\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add a new untracked file
+	if err := os.WriteFile(filepath.Join(dir, "untracked.go"), []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := r.UncommittedFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]string{}
+	for _, f := range files {
+		got[f.Path] = f.Status
+	}
+
+	if got["hello.go"] != "M" {
+		t.Errorf("hello.go status = %q, want M", got["hello.go"])
+	}
+	if got["untracked.go"] != "A" {
+		t.Errorf("untracked.go status = %q, want A", got["untracked.go"])
+	}
+}
+
+func TestUncommittedFilesBinary(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	// Create a binary file (contains null bytes)
+	if err := os.WriteFile(filepath.Join(dir, "image.png"), []byte{0x89, 0x50, 0x4E, 0x47, 0x00, 0x00}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := r.UncommittedFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]string{}
+	for _, f := range files {
+		got[f.Path] = f.Status
+	}
+
+	if got["image.png"] != "B" {
+		t.Errorf("image.png status = %q, want B", got["image.png"])
+	}
+}
+
 func TestDefaultBranchWithRemote(t *testing.T) {
 	dir := setupTestRepo(t)
 

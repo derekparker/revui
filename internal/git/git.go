@@ -2,7 +2,9 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -81,6 +83,99 @@ func (r *Runner) HasUncommittedChanges() bool {
 		return false
 	}
 	return strings.TrimSpace(out) != ""
+}
+
+// UncommittedFiles returns changed files (staged + unstaged vs HEAD) plus untracked files.
+// Binary files are marked with status "B".
+func (r *Runner) UncommittedFiles() ([]ChangedFile, error) {
+	// Get tracked changes (staged + unstaged)
+	diffOut, err := r.run("diff", "HEAD", "--name-status")
+	if err != nil {
+		// If HEAD doesn't exist (initial commit), try --cached
+		diffOut, err = r.run("diff", "--cached", "--name-status")
+		if err != nil {
+			diffOut = ""
+		}
+	}
+	files := ParseNameStatus(diffOut)
+
+	// Identify binary files among tracked changes via --numstat
+	binaries := r.detectBinaryTracked()
+
+	// Mark binary tracked files
+	for i := range files {
+		if binaries[files[i].Path] {
+			files[i].Status = "B"
+		}
+	}
+
+	// Get untracked files
+	untrackedOut, err := r.run("ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return files, nil
+	}
+
+	seen := make(map[string]bool, len(files))
+	for _, f := range files {
+		seen[f.Path] = true
+	}
+
+	for line := range strings.SplitSeq(strings.TrimSpace(untrackedOut), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || seen[line] {
+			continue
+		}
+		status := "A"
+		if r.isBinaryFile(line) {
+			status = "B"
+		}
+		files = append(files, ChangedFile{Path: line, Status: status})
+	}
+
+	return files, nil
+}
+
+// detectBinaryTracked returns a set of paths that are binary among tracked changes.
+func (r *Runner) detectBinaryTracked() map[string]bool {
+	out, err := r.run("diff", "HEAD", "--numstat")
+	if err != nil {
+		return nil
+	}
+	binaries := make(map[string]bool)
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Binary files show as "-\t-\tfilename"
+		if strings.HasPrefix(line, "-\t-\t") {
+			path := line[4:]
+			binaries[path] = true
+		}
+	}
+	return binaries
+}
+
+// isBinaryFile checks if a file appears to be binary by looking for null bytes in the first 8KB.
+func (r *Runner) isBinaryFile(path string) bool {
+	fullPath := filepath.Join(r.Dir, path)
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	buf := make([]byte, 8192)
+	n, err := f.Read(buf)
+	if n == 0 {
+		return false
+	}
+	for _, b := range buf[:n] {
+		if b == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Runner) run(args ...string) (string, error) {
