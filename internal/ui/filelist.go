@@ -15,6 +15,7 @@ var (
 	statusAddedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	statusModifiedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	statusDeletedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	statusBinaryStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 )
 
 // FileList is a Bubble Tea sub-model for displaying changed files.
@@ -133,7 +134,7 @@ func statusIcon(status string) string {
 	case "R":
 		return statusModifiedStyle.Render("R")
 	case "B":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Render("B")
+		return statusBinaryStyle.Render("B")
 	default:
 		return "?"
 	}

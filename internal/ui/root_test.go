@@ -161,3 +161,27 @@ func TestRootUncommittedFileList(t *testing.T) {
 		t.Errorf("expected 3 files, got %d", len(m.files))
 	}
 }
+
+func TestRootBinaryFileComment(t *testing.T) {
+	m := newTestRootUncommitted()
+
+	// Navigate to binary file (3rd file, index 2)
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(RootModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = updated.(RootModel)
+
+	// Enter diff viewer
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Fatal("expected focus on diff viewer")
+	}
+
+	// Press c to comment on binary file
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(RootModel)
+	if m.focus != focusCommentInput {
+		t.Error("expected comment input to activate on binary file")
+	}
+}

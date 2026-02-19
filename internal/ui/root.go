@@ -340,6 +340,14 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					m.commentInput.Activate(sel.Path, lineNo, lineNo, line.Type, line.Content, existing)
 					m.focus = focusCommentInput
+				} else if sel.Status == "B" {
+					// Binary file: allow comment on file itself
+					existing := ""
+					if c := m.comments.Get(sel.Path, 0); c != nil {
+						existing = c.Body
+					}
+					m.commentInput.Activate(sel.Path, 0, 0, git.LineContext, "", existing)
+					m.focus = focusCommentInput
 				}
 			}
 		}
