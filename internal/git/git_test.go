@@ -232,6 +232,81 @@ func TestUncommittedFilesBinary(t *testing.T) {
 	}
 }
 
+func TestUncommittedFileDiff(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	// Modify a tracked file
+	if err := os.WriteFile(filepath.Join(dir, "hello.go"), []byte("package main\n\nfunc hello() { /* changed */ }\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fd, err := r.UncommittedFileDiff("hello.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fd.Path != "hello.go" {
+		t.Errorf("path = %q, want %q", fd.Path, "hello.go")
+	}
+	if len(fd.Hunks) == 0 {
+		t.Fatal("expected at least one hunk for modified tracked file")
+	}
+}
+
+func TestUncommittedFileDiffUntracked(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	content := "package main\n\nfunc newFunc() {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "brand_new.go"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fd, err := r.UncommittedFileDiff("brand_new.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fd.Path != "brand_new.go" {
+		t.Errorf("path = %q, want %q", fd.Path, "brand_new.go")
+	}
+	if len(fd.Hunks) != 1 {
+		t.Fatalf("expected 1 hunk, got %d", len(fd.Hunks))
+	}
+	// All lines should be added
+	for _, line := range fd.Hunks[0].Lines {
+		if line.Type != LineAdded {
+			t.Errorf("expected all lines to be LineAdded, got %v for %q", line.Type, line.Content)
+		}
+	}
+	// Line numbers should start at 1
+	if fd.Hunks[0].Lines[0].NewLineNo != 1 {
+		t.Errorf("first line number = %d, want 1", fd.Hunks[0].Lines[0].NewLineNo)
+	}
+}
+
+func TestUncommittedFileDiffBinary(t *testing.T) {
+	dir := setupTestRepo(t)
+	r := &Runner{Dir: dir}
+
+	if err := os.WriteFile(filepath.Join(dir, "data.bin"), []byte{0xFF, 0x00, 0xAB}, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	fd, err := r.UncommittedFileDiff("data.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fd.Path != "data.bin" {
+		t.Errorf("path = %q, want %q", fd.Path, "data.bin")
+	}
+	if fd.Status != "B" {
+		t.Errorf("status = %q, want B", fd.Status)
+	}
+	if len(fd.Hunks) != 0 {
+		t.Errorf("expected 0 hunks for binary file, got %d", len(fd.Hunks))
+	}
+}
+
 func TestDefaultBranchWithRemote(t *testing.T) {
 	dir := setupTestRepo(t)
 

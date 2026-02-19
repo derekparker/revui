@@ -178,6 +178,72 @@ func (r *Runner) isBinaryFile(path string) bool {
 	return false
 }
 
+// UncommittedFileDiff returns the diff for a single file against HEAD.
+// For untracked files, it synthesizes an all-added diff.
+// For binary files, it returns a FileDiff with status "B" and no hunks.
+func (r *Runner) UncommittedFileDiff(path string) (*FileDiff, error) {
+	// Check if binary
+	if r.isBinaryFile(path) {
+		return &FileDiff{Path: path, Status: "B"}, nil
+	}
+
+	// Try diffing against HEAD (works for tracked files)
+	out, err := r.run("diff", "HEAD", "--", path)
+	if err != nil || strings.TrimSpace(out) == "" {
+		// Likely untracked — synthesize an all-added diff
+		return r.synthesizeNewFileDiff(path)
+	}
+
+	diffs, err := ParseDiff(out)
+	if err != nil {
+		return nil, err
+	}
+	if len(diffs) == 0 {
+		return &FileDiff{Path: path}, nil
+	}
+	diffs[0].Path = path
+	return &diffs[0], nil
+}
+
+// synthesizeNewFileDiff reads a file and creates a FileDiff where every line is added.
+func (r *Runner) synthesizeNewFileDiff(path string) (*FileDiff, error) {
+	fullPath := filepath.Join(r.Dir, path)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading untracked file %s: %w", path, err)
+	}
+
+	rawLines := strings.Split(string(content), "\n")
+	// Remove trailing empty line from final newline
+	if len(rawLines) > 0 && rawLines[len(rawLines)-1] == "" {
+		rawLines = rawLines[:len(rawLines)-1]
+	}
+
+	lines := make([]Line, len(rawLines))
+	for i, l := range rawLines {
+		lines[i] = Line{
+			Content:   l,
+			Type:      LineAdded,
+			NewLineNo: i + 1,
+		}
+	}
+
+	return &FileDiff{
+		Path:   path,
+		Status: "A",
+		Hunks: []Hunk{
+			{
+				OldStart: 0,
+				OldCount: 0,
+				NewStart: 1,
+				NewCount: len(lines),
+				Header:   fmt.Sprintf("@@ -0,0 +1,%d @@", len(lines)),
+				Lines:    lines,
+			},
+		},
+	}, nil
+}
+
 func (r *Runner) run(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Dir
