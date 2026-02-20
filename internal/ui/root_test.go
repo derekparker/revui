@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -200,4 +201,232 @@ func TestRootBinaryFileComment(t *testing.T) {
 	if m.focus != focusCommentInput {
 		t.Error("expected comment input to activate on binary file")
 	}
+}
+
+// dynamicMockGitRunner supports changing file lists between calls for refresh testing.
+type dynamicMockGitRunner struct {
+	filesCalls   int
+	filesResults [][]git.ChangedFile
+	diffs        map[string]*git.FileDiff
+}
+
+func (d *dynamicMockGitRunner) ChangedFiles(_ string) ([]git.ChangedFile, error) {
+	return nil, nil
+}
+
+func (d *dynamicMockGitRunner) FileDiff(_ string, path string) (*git.FileDiff, error) {
+	return &git.FileDiff{Path: path}, nil
+}
+
+func (d *dynamicMockGitRunner) CurrentBranch() (string, error) {
+	return "feature", nil
+}
+
+func (d *dynamicMockGitRunner) HasUncommittedChanges() bool {
+	return true
+}
+
+func (d *dynamicMockGitRunner) UncommittedFiles() ([]git.ChangedFile, error) {
+	idx := d.filesCalls
+	d.filesCalls++
+	if idx < len(d.filesResults) {
+		return d.filesResults[idx], nil
+	}
+	return d.filesResults[len(d.filesResults)-1], nil
+}
+
+func (d *dynamicMockGitRunner) UncommittedFileDiff(path string) (*git.FileDiff, error) {
+	if fd, ok := d.diffs[path]; ok {
+		return fd, nil
+	}
+	return &git.FileDiff{Path: path}, nil
+}
+
+func TestRefreshCmd(t *testing.T) {
+	mock := &dynamicMockGitRunner{
+		filesResults: [][]git.ChangedFile{
+			// First call (constructor)
+			{{Path: "a.go", Status: "M"}},
+			// Second call (refresh)
+			{{Path: "a.go", Status: "M"}, {Path: "b.go", Status: "A"}},
+		},
+		diffs: map[string]*git.FileDiff{
+			"a.go": makeTestDiff(),
+		},
+	}
+	m := NewRootModelUncommitted(mock, 80, 24)
+
+	cmd := m.refreshCmd()
+	if cmd == nil {
+		t.Fatal("refreshCmd should return a non-nil command")
+	}
+
+	// Execute the command synchronously
+	msg := cmd()
+	result, ok := msg.(refreshResultMsg)
+	if !ok {
+		t.Fatalf("expected refreshResultMsg, got %T", msg)
+	}
+
+	if result.err != nil {
+		t.Fatalf("unexpected error: %v", result.err)
+	}
+
+	if len(result.files) != 2 {
+		t.Errorf("expected 2 files, got %d", len(result.files))
+	}
+
+	if result.requestedPath != "a.go" {
+		t.Errorf("requestedPath = %q, want %q", result.requestedPath, "a.go")
+	}
+}
+
+func TestRefreshCmdEmptyFileList(t *testing.T) {
+	mock := &dynamicMockGitRunner{
+		filesResults: [][]git.ChangedFile{
+			{}, // constructor gets empty list
+			{{Path: "a.go", Status: "A"}}, // refresh finds a new file
+		},
+		diffs: map[string]*git.FileDiff{},
+	}
+	m := NewRootModelUncommitted(mock, 80, 24)
+
+	cmd := m.refreshCmd()
+	msg := cmd()
+	result := msg.(refreshResultMsg)
+
+	if result.requestedPath != "" {
+		t.Errorf("requestedPath = %q, want empty", result.requestedPath)
+	}
+	if result.diff != nil {
+		t.Error("diff should be nil when no file was selected")
+	}
+	if len(result.files) != 1 {
+		t.Errorf("expected 1 file, got %d", len(result.files))
+	}
+}
+
+func TestRootTickRefreshMsg(t *testing.T) {
+	m := newTestRootUncommitted()
+
+	t.Run("triggers refresh command", func(t *testing.T) {
+		updated, cmd := m.Update(tickRefreshMsg{})
+		m2 := updated.(RootModel)
+		if cmd == nil {
+			t.Error("tickRefreshMsg should produce a command")
+		}
+		if !m2.refreshInProgress {
+			t.Error("refreshInProgress should be true")
+		}
+	})
+
+	t.Run("skips when refresh already in progress", func(t *testing.T) {
+		m2 := m
+		m2.refreshInProgress = true
+		updated, cmd := m2.Update(tickRefreshMsg{})
+		_ = updated.(RootModel)
+		if cmd == nil {
+			t.Error("should still schedule next tick even when skipping")
+		}
+	})
+
+	t.Run("ignored in branch mode", func(t *testing.T) {
+		branchModel := newTestRoot()
+		updated, cmd := branchModel.Update(tickRefreshMsg{})
+		m2 := updated.(RootModel)
+		if cmd != nil {
+			t.Error("tickRefreshMsg should be ignored in branch mode")
+		}
+		if m2.refreshInProgress {
+			t.Error("refreshInProgress should not be set in branch mode")
+		}
+	})
+}
+
+func TestRootRefreshResultMsg(t *testing.T) {
+	mock := &dynamicMockGitRunner{
+		filesResults: [][]git.ChangedFile{
+			{{Path: "a.go", Status: "M"}, {Path: "b.go", Status: "A"}},
+		},
+		diffs: map[string]*git.FileDiff{
+			"a.go": makeTestDiff(),
+		},
+	}
+	m := NewRootModelUncommitted(mock, 80, 24)
+	m.refreshInProgress = true
+
+	t.Run("updates file list", func(t *testing.T) {
+		newFiles := []git.ChangedFile{
+			{Path: "a.go", Status: "M"},
+			{Path: "c.go", Status: "A"},
+		}
+		result := refreshResultMsg{
+			files:         newFiles,
+			diff:          makeTestDiff(),
+			requestedPath: "a.go",
+		}
+		updated, cmd := m.Update(result)
+		m2 := updated.(RootModel)
+
+		if m2.refreshInProgress {
+			t.Error("refreshInProgress should be cleared")
+		}
+		if len(m2.files) != 2 {
+			t.Errorf("expected 2 files, got %d", len(m2.files))
+		}
+		if m2.files[1].Path != "c.go" {
+			t.Errorf("second file = %q, want c.go", m2.files[1].Path)
+		}
+		if cmd == nil {
+			t.Error("should schedule next tick")
+		}
+	})
+
+	t.Run("skips diff update when file changed", func(t *testing.T) {
+		m2 := m
+		// Move cursor to b.go
+		m2.fileList, _ = m2.fileList.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+
+		result := refreshResultMsg{
+			files:         m2.files,
+			diff:          makeTestDiff(),
+			requestedPath: "a.go", // was requested for a.go, but user is now on b.go
+		}
+		updated, _ := m2.Update(result)
+		_ = updated.(RootModel)
+		// No crash, diff for b.go should not be overwritten
+	})
+
+	t.Run("handles error gracefully", func(t *testing.T) {
+		m2 := m
+		result := refreshResultMsg{err: fmt.Errorf("git error")}
+		updated, cmd := m2.Update(result)
+		m3 := updated.(RootModel)
+		if m3.refreshInProgress {
+			t.Error("refreshInProgress should be cleared on error")
+		}
+		if cmd == nil {
+			t.Error("should reschedule tick after error")
+		}
+		// File list should remain unchanged
+		if len(m3.files) != len(m.files) {
+			t.Error("file list should not change on error")
+		}
+	})
+
+	t.Run("handles all files removed", func(t *testing.T) {
+		m2 := m
+		result := refreshResultMsg{
+			files:         nil,
+			requestedPath: "a.go",
+		}
+		updated, cmd := m2.Update(result)
+		m3 := updated.(RootModel)
+		if len(m3.files) != 0 {
+			t.Errorf("expected 0 files, got %d", len(m3.files))
+		}
+		if cmd == nil {
+			t.Error("should reschedule tick")
+		}
+	})
 }

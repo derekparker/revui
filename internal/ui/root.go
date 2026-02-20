@@ -182,6 +182,41 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commentInput.SetWidth(m.width)
 		return m, nil
 
+	case tickRefreshMsg:
+		if m.mode != modeUncommitted {
+			return m, nil
+		}
+		if m.refreshInProgress {
+			return m, scheduleRefreshTick()
+		}
+		m.refreshInProgress = true
+		return m, m.refreshCmd()
+
+	case refreshResultMsg:
+		m.refreshInProgress = false
+		if msg.err != nil {
+			return m, scheduleRefreshTick()
+		}
+
+		// Update file list
+		m.files = msg.files
+		m.fileList.SetFiles(msg.files)
+
+		// Update diff only if the user is still on the same file
+		currentPath := ""
+		if len(m.files) > 0 {
+			currentPath = m.fileList.SelectedFile().Path
+		}
+		if msg.diff != nil && msg.requestedPath == currentPath {
+			m.diffViewer.RefreshDiff(msg.diff)
+			m.updateCommentMarkers()
+		} else if currentPath == "" {
+			// All files removed
+			m.diffViewer.RefreshDiff(nil)
+		}
+
+		return m, scheduleRefreshTick()
+
 	case CommentSubmitMsg:
 		m.comments.Add(comment.Comment{
 			FilePath:    msg.FilePath,
@@ -442,6 +477,39 @@ func scheduleRefreshTick() tea.Cmd {
 	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg {
 		return tickRefreshMsg{}
 	})
+}
+
+// refreshCmd returns a tea.Cmd that asynchronously fetches the current file list
+// and diff for the selected file.
+func (m RootModel) refreshCmd() tea.Cmd {
+	currentPath := ""
+	if len(m.files) > 0 {
+		currentPath = m.fileList.SelectedFile().Path
+	}
+	gitRunner := m.git
+
+	return func() tea.Msg {
+		files, err := gitRunner.UncommittedFiles()
+		if err != nil {
+			return refreshResultMsg{err: err}
+		}
+
+		var diff *git.FileDiff
+		if currentPath != "" {
+			for _, f := range files {
+				if f.Path == currentPath {
+					diff, _ = gitRunner.UncommittedFileDiff(currentPath)
+					break
+				}
+			}
+		}
+
+		return refreshResultMsg{
+			files:         files,
+			diff:          diff,
+			requestedPath: currentPath,
+		}
+	}
 }
 
 // View renders the full UI.
