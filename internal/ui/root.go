@@ -40,6 +40,17 @@ type GitRunner interface {
 // finishMsg signals the review is done and comments should be copied.
 type finishMsg struct{}
 
+// tickRefreshMsg signals that it's time to check for uncommitted changes.
+type tickRefreshMsg struct{}
+
+// refreshResultMsg carries the results of an async refresh operation.
+type refreshResultMsg struct {
+	files         []git.ChangedFile
+	diff          *git.FileDiff
+	requestedPath string // the file path that was selected when the refresh started
+	err           error
+}
+
 // RootModel is the top-level Bubble Tea model.
 type RootModel struct {
 	git           GitRunner
@@ -62,7 +73,8 @@ type RootModel struct {
 	pendingZ      bool
 	showHelp      bool
 	searchInput   textinput.Model
-	searching     bool
+	searching         bool
+	refreshInProgress bool
 }
 
 // NewRootModel creates the root model with the given git runner and base branch.
