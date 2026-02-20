@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -164,6 +165,9 @@ func NewRootModelUncommitted(gitRunner GitRunner, width, height int) RootModel {
 
 // Init returns the initial command.
 func (m RootModel) Init() tea.Cmd {
+	if m.mode == modeUncommitted {
+		return scheduleRefreshTick()
+	}
 	return nil
 }
 
@@ -429,6 +433,15 @@ func (m *RootModel) loadFileDiff(path string) (*git.FileDiff, error) {
 		return m.git.UncommittedFileDiff(path)
 	}
 	return m.git.FileDiff(m.base, path)
+}
+
+const refreshInterval = 2 * time.Second
+
+// scheduleRefreshTick returns a tea.Cmd that sends a tickRefreshMsg after the refresh interval.
+func scheduleRefreshTick() tea.Cmd {
+	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg{}
+	})
 }
 
 // View renders the full UI.

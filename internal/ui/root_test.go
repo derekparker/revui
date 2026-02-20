@@ -162,6 +162,22 @@ func TestRootUncommittedFileList(t *testing.T) {
 	}
 }
 
+func TestRootInitUncommittedReturnsTick(t *testing.T) {
+	m := newTestRootUncommitted()
+	cmd := m.Init()
+	if cmd == nil {
+		t.Error("Init() should return a tick command in uncommitted mode")
+	}
+}
+
+func TestRootInitBranchReturnsNil(t *testing.T) {
+	m := newTestRoot()
+	cmd := m.Init()
+	if cmd != nil {
+		t.Error("Init() should return nil in branch diff mode")
+	}
+}
+
 func TestRootBinaryFileComment(t *testing.T) {
 	m := newTestRootUncommitted()
 
