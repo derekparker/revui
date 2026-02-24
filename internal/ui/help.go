@@ -34,7 +34,7 @@ func RenderHelp() string {
 		"  n/N         Next/prev search result\n" +
 		"\n" +
 		"Actions\n" +
-		"  ZZ          Finish review (copy to clipboard)\n" +
+		"  ZZ          Finish review (choose output destination)\n" +
 		"  q           Quit without copying\n" +
 		"  ?           Toggle this help\n" +
 		"\n" +
