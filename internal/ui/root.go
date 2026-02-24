@@ -224,12 +224,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CommentSubmitMsg:
 		m.comments.Add(comment.Comment{
-			FilePath:    msg.FilePath,
-			StartLine:   msg.LineNo,
-			EndLine:     msg.EndLineNo,
-			LineType:    msg.LineType,
-			Body:        msg.Body,
-			CodeSnippet: msg.CodeSnippet,
+			FilePath:  msg.FilePath,
+			StartLine: msg.LineNo,
+			EndLine:   msg.EndLineNo,
+			LineType:  msg.LineType,
+			Body:      msg.Body,
 		})
 		m.focus = focusDiffViewer
 		m.updateCommentMarkers()
@@ -412,13 +411,12 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				vStart, vEnd := m.diffViewer.VisualRange()
 				startLineNo := m.diffViewer.LineNoAt(vStart)
 				endLineNo := m.diffViewer.LineNoAt(vEnd)
-				snippet := m.diffViewer.SnippetRange(vStart, vEnd)
 				lineType := git.LineContext
 				if dl := m.diffViewer.lineAt(vStart); dl != nil && dl.line != nil {
 					lineType = dl.line.Type
 				}
 				m.diffViewer.ExitVisualMode()
-				m.commentInput.Activate(sel.Path, startLineNo, endLineNo, lineType, snippet, "")
+				m.commentInput.Activate(sel.Path, startLineNo, endLineNo, lineType, "")
 				m.focus = focusCommentInput
 			} else {
 				// Single-line comment
@@ -429,7 +427,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					if c := m.comments.Get(sel.Path, lineNo); c != nil {
 						existing = c.Body
 					}
-					m.commentInput.Activate(sel.Path, lineNo, lineNo, line.Type, line.Content, existing)
+					m.commentInput.Activate(sel.Path, lineNo, lineNo, line.Type, existing)
 					m.focus = focusCommentInput
 				} else if sel.Status == "B" {
 					// Binary file: allow comment on file itself
@@ -437,7 +435,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					if c := m.comments.Get(sel.Path, 0); c != nil {
 						existing = c.Body
 					}
-					m.commentInput.Activate(sel.Path, 0, 0, git.LineContext, "", existing)
+					m.commentInput.Activate(sel.Path, 0, 0, git.LineContext, existing)
 					m.focus = focusCommentInput
 				}
 			}

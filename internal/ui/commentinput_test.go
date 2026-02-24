@@ -15,7 +15,7 @@ func TestCommentInputActivate(t *testing.T) {
 		t.Error("should not be active initially")
 	}
 
-	ci.Activate("main.go", 10, 10, git.LineAdded, "code", "")
+	ci.Activate("main.go", 10, 10, git.LineAdded, "")
 	if !ci.Active() {
 		t.Error("should be active after Activate")
 	}
@@ -29,7 +29,7 @@ func TestCommentInputActivate(t *testing.T) {
 
 func TestCommentInputCancel(t *testing.T) {
 	ci := NewCommentInput(80)
-	ci.Activate("main.go", 10, 10, git.LineContext, "", "")
+	ci.Activate("main.go", 10, 10, git.LineContext, "")
 
 	ci, _ = ci.Update(tea.KeyMsg{Type: tea.KeyEscape})
 	if ci.Active() {
@@ -39,7 +39,7 @@ func TestCommentInputCancel(t *testing.T) {
 
 func TestCommentInputEditExisting(t *testing.T) {
 	ci := NewCommentInput(80)
-	ci.Activate("main.go", 10, 10, git.LineContext, "", "existing comment")
+	ci.Activate("main.go", 10, 10, git.LineContext, "existing comment")
 
 	if ci.Value() != "existing comment" {
 		t.Errorf("value = %q, want %q", ci.Value(), "existing comment")

@@ -9,7 +9,6 @@ type Comment struct {
 	EndLine     int
 	LineType    git.LineType
 	Body        string
-	CodeSnippet string
 }
 
 type commentKey struct {

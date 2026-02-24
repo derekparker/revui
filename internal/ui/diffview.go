@@ -632,18 +632,6 @@ func (dv DiffViewer) LineNoAt(idx int) int {
 	return dl.line.NewLineNo
 }
 
-// SnippetRange returns the code snippet text for lines between start and end indices (inclusive).
-func (dv DiffViewer) SnippetRange(start, end int) string {
-	var lines []string
-	for i := start; i <= end; i++ {
-		dl := dv.lineAt(i)
-		if dl != nil && dl.line != nil {
-			lines = append(lines, dl.line.Content)
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
 // ExitVisualMode exits visual mode.
 func (dv *DiffViewer) ExitVisualMode() {
 	dv.visualMode = false

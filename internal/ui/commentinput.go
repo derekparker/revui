@@ -19,7 +19,6 @@ type CommentSubmitMsg struct {
 	LineNo      int
 	EndLineNo   int
 	Body        string
-	CodeSnippet string
 	LineType    git.LineType
 }
 
@@ -33,7 +32,6 @@ type CommentInput struct {
 	filePath    string
 	lineNo      int
 	endLineNo   int
-	codeSnippet string
 	lineType    git.LineType
 	width       int
 }
@@ -52,13 +50,12 @@ func NewCommentInput(width int) CommentInput {
 }
 
 // Activate shows the input and optionally pre-fills with an existing comment.
-func (ci *CommentInput) Activate(filePath string, lineNo, endLineNo int, lineType git.LineType, snippet, existing string) {
+func (ci *CommentInput) Activate(filePath string, lineNo, endLineNo int, lineType git.LineType, existing string) {
 	ci.active = true
 	ci.filePath = filePath
 	ci.lineNo = lineNo
 	ci.endLineNo = endLineNo
 	ci.lineType = lineType
-	ci.codeSnippet = snippet
 	ci.input.SetValue(existing)
 	ci.input.Focus()
 }
@@ -89,12 +86,11 @@ func (ci CommentInput) Update(msg tea.Msg) (CommentInput, tea.Cmd) {
 				return ci, func() tea.Msg { return CommentCancelMsg{} }
 			}
 			submitMsg := CommentSubmitMsg{
-				FilePath:    ci.filePath,
-				LineNo:      ci.lineNo,
-				EndLineNo:   ci.endLineNo,
-				Body:        body,
-				CodeSnippet: ci.codeSnippet,
-				LineType:    ci.lineType,
+				FilePath:  ci.filePath,
+				LineNo:    ci.lineNo,
+				EndLineNo: ci.endLineNo,
+				Body:      body,
+				LineType:  ci.lineType,
 			}
 			return ci, func() tea.Msg { return submitMsg }
 		}
