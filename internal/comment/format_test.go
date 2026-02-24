@@ -10,47 +10,36 @@ import (
 func TestFormatSingleComment(t *testing.T) {
 	store := NewStore()
 	store.Add(Comment{
-		FilePath:    "main.go",
-		StartLine:   10,
-		EndLine:     10,
-		LineType:    git.LineAdded,
-		Body:        "This needs error handling.",
-		CodeSnippet: "func doThing() {",
+		FilePath:  "main.go",
+		StartLine: 10,
+		EndLine:   10,
+		LineType:  git.LineAdded,
+		Body:      "This needs error handling.",
 	})
 
 	out := Format(store.All())
 
-	if !strings.Contains(out, "## Code Review Comments") {
-		t.Error("missing header")
-	}
-	if !strings.Contains(out, "### main.go") {
-		t.Error("missing file path")
-	}
-	if !strings.Contains(out, "Line 10 (added)") {
-		t.Error("missing line info")
-	}
-	if !strings.Contains(out, "This needs error handling.") {
-		t.Error("missing comment body")
-	}
-	if !strings.Contains(out, "func doThing() {") {
-		t.Error("missing code snippet")
+	expected := "main.go\n- L10 (added): This needs error handling.\n"
+	if out != expected {
+		t.Errorf("got:\n%s\nwant:\n%s", out, expected)
 	}
 }
 
 func TestFormatRangeComment(t *testing.T) {
 	store := NewStore()
 	store.Add(Comment{
-		FilePath:    "util.go",
-		StartLine:   5,
-		EndLine:     8,
-		LineType:    git.LineRemoved,
-		Body:        "Why was this removed?",
-		CodeSnippet: "old code here",
+		FilePath:  "util.go",
+		StartLine: 5,
+		EndLine:   8,
+		LineType:  git.LineRemoved,
+		Body:      "Why was this removed?",
 	})
 
 	out := Format(store.All())
-	if !strings.Contains(out, "Lines 5-8 (removed)") {
-		t.Error("missing range line info")
+
+	expected := "util.go\n- L5-8 (removed): Why was this removed?\n"
+	if out != expected {
+		t.Errorf("got:\n%s\nwant:\n%s", out, expected)
 	}
 }
 
@@ -62,10 +51,10 @@ func TestFormatGroupsByFile(t *testing.T) {
 
 	out := Format(store.All())
 
-	if strings.Count(out, "### a.go") != 1 {
+	if strings.Count(out, "a.go\n") != 1 {
 		t.Error("a.go header should appear exactly once")
 	}
-	if strings.Count(out, "### b.go") != 1 {
+	if strings.Count(out, "b.go\n") != 1 {
 		t.Error("b.go header should appear exactly once")
 	}
 }
@@ -110,10 +99,10 @@ func TestStoreGetByFileLine(t *testing.T) {
 
 func BenchmarkFormat(b *testing.B) {
 	comments := []Comment{
-		{FilePath: "a.go", StartLine: 1, EndLine: 1, LineType: git.LineAdded, Body: "first comment", CodeSnippet: "func foo() {}"},
-		{FilePath: "a.go", StartLine: 10, EndLine: 15, LineType: git.LineRemoved, Body: "second comment", CodeSnippet: "old code"},
-		{FilePath: "b.go", StartLine: 5, EndLine: 5, LineType: git.LineContext, Body: "third comment", CodeSnippet: "some code"},
-		{FilePath: "c.go", StartLine: 20, EndLine: 20, LineType: git.LineAdded, Body: "fourth comment", CodeSnippet: "new code"},
+		{FilePath: "a.go", StartLine: 1, EndLine: 1, LineType: git.LineAdded, Body: "first comment"},
+		{FilePath: "a.go", StartLine: 10, EndLine: 15, LineType: git.LineRemoved, Body: "second comment"},
+		{FilePath: "b.go", StartLine: 5, EndLine: 5, LineType: git.LineContext, Body: "third comment"},
+		{FilePath: "c.go", StartLine: 20, EndLine: 20, LineType: git.LineAdded, Body: "fourth comment"},
 	}
 	b.ResetTimer()
 	for b.Loop() {
