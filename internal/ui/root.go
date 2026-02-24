@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/deparker/revui/internal/comment"
 	"github.com/deparker/revui/internal/git"
+	"github.com/deparker/revui/internal/output"
 )
 
 type focusArea int
@@ -19,6 +21,7 @@ const (
 	focusFileList focusArea = iota
 	focusDiffViewer
 	focusCommentInput
+	focusOutputSelect
 )
 
 type reviewMode int
@@ -72,10 +75,12 @@ type RootModel struct {
 	output        string // formatted comments for clipboard
 	fileListWidth int
 	pendingZ      bool
-	showHelp      bool
-	searchInput   textinput.Model
+	showHelp          bool
+	searchInput       textinput.Model
 	searching         bool
 	refreshInProgress bool
+	outputSelector    OutputSelector
+	deliveryResult    string // status message after delivery
 }
 
 // NewRootModel creates the root model with the given git runner and base branch.
@@ -234,6 +239,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.focus = focusDiffViewer
 		return m, nil
 
+	case OutputSelectMsg:
+		result, err := output.Deliver(msg.Target, m.output)
+		if err != nil {
+			m.outputSelector.SetError(err.Error())
+			return m, nil
+		}
+		m.deliveryResult = result
+		m.finished = true
+		return m, tea.Quit
+
+	case OutputCancelMsg:
+		m.quitting = true
+		return m, tea.Quit
+
 	case navigateFileMsg:
 		var switched bool
 		if msg.direction > 0 {
@@ -255,14 +274,27 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case finishMsg:
 		m.output = comment.Format(m.comments.All())
-		m.finished = true
-		return m, tea.Quit
+		if m.output == "" {
+			m.finished = true
+			return m, tea.Quit
+		}
+		targets := output.DetectTargets(os.Getenv("TMUX"), os.Getenv("TMUX_PANE"))
+		m.outputSelector = NewOutputSelector(targets, m.width, m.height)
+		m.focus = focusOutputSelect
+		return m, nil
 
 	case tea.KeyMsg:
 		// Comment input gets priority when active
 		if m.focus == focusCommentInput {
 			var cmd tea.Cmd
 			m.commentInput, cmd = m.commentInput.Update(msg)
+			return m, cmd
+		}
+
+		// Output selector gets priority when active
+		if m.focus == focusOutputSelect {
+			var cmd tea.Cmd
+			m.outputSelector, cmd = m.outputSelector.Update(msg)
 			return m, cmd
 		}
 
@@ -307,8 +339,16 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.pendingZ {
 			m.pendingZ = false
 			m.output = comment.Format(m.comments.All())
-			m.finished = true
-			return m, tea.Quit
+			if m.output == "" {
+				// No comments — quit directly
+				m.finished = true
+				return m, tea.Quit
+			}
+			// Show output selector
+			targets := output.DetectTargets(os.Getenv("TMUX"), os.Getenv("TMUX_PANE"))
+			m.outputSelector = NewOutputSelector(targets, m.width, m.height)
+			m.focus = focusOutputSelect
+			return m, nil
 		}
 		m.pendingZ = true
 		return m, nil
@@ -522,6 +562,10 @@ func (m RootModel) View() string {
 		return RenderHelp()
 	}
 
+	if m.focus == focusOutputSelect {
+		return m.outputSelector.View()
+	}
+
 	var b strings.Builder
 
 	// Header
@@ -592,4 +636,9 @@ func (m RootModel) Output() string {
 // Finished returns whether the review was completed (not quit).
 func (m RootModel) Finished() bool {
 	return m.finished
+}
+
+// DeliveryResult returns the status message from delivery (available after finish).
+func (m RootModel) DeliveryResult() string {
+	return m.deliveryResult
 }

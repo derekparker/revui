@@ -2,12 +2,15 @@ package ui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/deparker/revui/internal/comment"
 	"github.com/deparker/revui/internal/git"
+	"github.com/deparker/revui/internal/output"
 )
 
 type mockGitRunner struct {
@@ -429,4 +432,108 @@ func TestRootRefreshResultMsg(t *testing.T) {
 			t.Error("should reschedule tick")
 		}
 	})
+}
+
+func TestRootZZShowsOutputSelector(t *testing.T) {
+	m := newTestRoot()
+
+	// Add a comment so there's output to deliver
+	m.comments.Add(comment.Comment{
+		FilePath:  "main.go",
+		StartLine: 1,
+		EndLine:   1,
+		Body:      "test comment",
+	})
+
+	// First Z
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+	// Second Z — should show output selector, not quit
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+
+	if m.focus != focusOutputSelect {
+		t.Errorf("focus = %d, want focusOutputSelect (%d)", m.focus, focusOutputSelect)
+	}
+	if cmd != nil {
+		t.Error("should not produce a quit command when showing selector")
+	}
+	if m.output == "" {
+		t.Error("output should be formatted before showing selector")
+	}
+}
+
+func TestRootZZNoCommentsQuitsDirectly(t *testing.T) {
+	m := newTestRoot()
+
+	// ZZ with no comments should quit directly
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'Z'}})
+	m = updated.(RootModel)
+
+	if !m.Finished() {
+		t.Error("ZZ with no comments should set finished")
+	}
+	if cmd == nil {
+		t.Error("ZZ with no comments should produce quit command")
+	}
+}
+
+func TestRootOutputSelectorCancel(t *testing.T) {
+	m := newTestRoot()
+	m.focus = focusOutputSelect
+	m.outputSelector = NewOutputSelector(nil, 80, 24)
+
+	updated, cmd := m.Update(OutputCancelMsg{})
+	m = updated.(RootModel)
+
+	if !m.quitting {
+		t.Error("OutputCancelMsg should set quitting")
+	}
+	if cmd == nil {
+		t.Error("OutputCancelMsg should produce quit command")
+	}
+}
+
+func TestRootOutputSelectorDeliverFile(t *testing.T) {
+	m := newTestRoot()
+	m.focus = focusOutputSelect
+	m.output = "## Test Review\n\nTest content"
+
+	target := output.OutputTarget{Kind: output.TargetFile, Label: "Write to file"}
+	updated, cmd := m.Update(OutputSelectMsg{Target: target})
+	m = updated.(RootModel)
+
+	if !m.Finished() {
+		t.Error("successful delivery should set finished")
+	}
+	if m.DeliveryResult() == "" {
+		t.Error("delivery result should not be empty")
+	}
+	if cmd == nil {
+		t.Error("successful delivery should produce quit command")
+	}
+
+	// Clean up temp file
+	if strings.HasPrefix(m.DeliveryResult(), "Review written to") {
+		parts := strings.Split(m.DeliveryResult(), " ")
+		if len(parts) >= 4 {
+			filepath := parts[3]
+			os.Remove(filepath)
+		}
+	}
+}
+
+func TestRootOutputSelectorViewRendered(t *testing.T) {
+	m := newTestRoot()
+	m.focus = focusOutputSelect
+	m.outputSelector = NewOutputSelector([]output.OutputTarget{
+		{Kind: output.TargetFile, Label: "Write to file"},
+	}, 80, 24)
+
+	view := m.View()
+	if !strings.Contains(view, "Send review to:") {
+		t.Error("view should contain output selector title")
+	}
 }
