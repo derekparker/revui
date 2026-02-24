@@ -1,6 +1,8 @@
 package output
 
 import (
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -135,4 +137,101 @@ func TestTargetKindConstants(t *testing.T) {
 		}
 		seen[k] = true
 	}
+}
+
+func TestDetectTargets(t *testing.T) {
+	tests := []struct {
+		name     string
+		tmuxEnv  string
+		tmuxPane string
+		want     []OutputTarget
+	}{
+		{
+			name:     "not in tmux",
+			tmuxEnv:  "",
+			tmuxPane: "",
+			want: []OutputTarget{
+				{Kind: TargetClipboard, Label: "System clipboard"},
+				{Kind: TargetFile, Label: "Write to file"},
+			},
+		},
+		{
+			name:     "in tmux but empty pane list",
+			tmuxEnv:  "/tmp/tmux-1000/default,12345,0",
+			tmuxPane: "session:0.0",
+			want: []OutputTarget{
+				{Kind: TargetTmuxBuffer, Label: "tmux paste buffer"},
+				{Kind: TargetClipboard, Label: "System clipboard"},
+				{Kind: TargetFile, Label: "Write to file"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DetectTargets(tt.tmuxEnv, tt.tmuxPane)
+
+			// For the "not in tmux" case, verify we get exactly clipboard + file
+			if tt.tmuxEnv == "" {
+				if len(got) != 2 {
+					t.Fatalf("got %d targets, want 2", len(got))
+				}
+			}
+
+			// Verify clipboard and file are always the last two items
+			if len(got) < 2 {
+				t.Fatalf("got %d targets, want at least 2", len(got))
+			}
+
+			lastTwo := got[len(got)-2:]
+			if lastTwo[0].Kind != TargetClipboard || lastTwo[0].Label != "System clipboard" {
+				t.Errorf("second-to-last target = {Kind: %v, Label: %q}, want {Kind: TargetClipboard, Label: \"System clipboard\"}", lastTwo[0].Kind, lastTwo[0].Label)
+			}
+			if lastTwo[1].Kind != TargetFile || lastTwo[1].Label != "Write to file" {
+				t.Errorf("last target = {Kind: %v, Label: %q}, want {Kind: TargetFile, Label: \"Write to file\"}", lastTwo[1].Kind, lastTwo[1].Label)
+			}
+		})
+	}
+}
+
+func TestDeliverFile(t *testing.T) {
+	content := "# Code Review\n\nTest content"
+	target := OutputTarget{
+		Kind:  TargetFile,
+		Label: "Write to file",
+	}
+
+	msg, err := Deliver(target, content)
+	if err != nil {
+		t.Fatalf("Deliver failed: %v", err)
+	}
+
+	// Check that message contains the path
+	if !strings.Contains(msg, "Review written to") {
+		t.Errorf("message %q does not contain expected prefix", msg)
+	}
+	if !strings.Contains(msg, "/tmp/revui-review-") {
+		t.Errorf("message %q does not contain expected path", msg)
+	}
+
+	// Extract the file path from the message
+	// Message format: "Review written to <path>"
+	parts := strings.Split(msg, "Review written to ")
+	if len(parts) != 2 {
+		t.Fatalf("unexpected message format: %q", msg)
+	}
+	filePath := strings.TrimSpace(parts[1])
+
+	// Verify the file exists and has correct content
+	gotContent, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+
+	if string(gotContent) != content {
+		t.Errorf("file content = %q, want %q", string(gotContent), content)
+	}
+
+	// Clean up
+	os.Remove(filePath)
 }
