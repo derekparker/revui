@@ -1,13 +1,14 @@
 package output
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/aymanbagabas/go-osc52/v2"
 )
 
 // TargetKind identifies the type of output destination.
@@ -22,9 +23,10 @@ const (
 
 // OutputTarget represents a destination for review output.
 type OutputTarget struct {
-	Kind       TargetKind
-	Label      string
-	TmuxTarget string // pane identifier for tmux send-keys (Claude targets only)
+	Kind         TargetKind
+	Label        string
+	TmuxTarget   string // pane identifier for tmux send-keys (Claude targets only)
+	ZellijTarget string // pane identifier for zellij actions (Claude targets only)
 }
 
 // parseTmuxPanes parses output from `tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_current_command} #{pane_pid}'`.
@@ -151,36 +153,14 @@ func deliverToTmuxBuffer(content string) (string, error) {
 }
 
 // deliverToClipboard tries available clipboard utilities to copy content.
+// deliverToClipboard copies content to clipboard using OSC 52 escape sequences.
 func deliverToClipboard(content string) (string, error) {
-	// Try clipboard utilities in order
-	utilities := [][]string{
-		{"xclip", "-selection", "clipboard"},
-		{"xsel", "--input", "--clipboard"},
-		{"wl-copy"},
+	seq := osc52.New(content)
+	_, err := fmt.Fprint(os.Stderr, seq)
+	if err != nil {
+		return "", fmt.Errorf("failed to write OSC 52 sequence: %w", err)
 	}
-
-	var lastErr error
-	for _, util := range utilities {
-		cmd := exec.Command(util[0], util[1:]...)
-		cmd.Stdin = strings.NewReader(content)
-
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-
-		if err := cmd.Run(); err != nil {
-			lastErr = err
-			continue
-		}
-
-		// Success
-		return "Review comments copied to clipboard.", nil
-	}
-
-	if lastErr != nil {
-		return "", fmt.Errorf("no clipboard utility available (tried xclip, xsel, wl-copy): %w", lastErr)
-	}
-
-	return "", fmt.Errorf("no clipboard utility available (tried xclip, xsel, wl-copy)")
+	return "Review copied to clipboard via OSC 52.", nil
 }
 
 // deliverToFile writes content to a timestamped file.

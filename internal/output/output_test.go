@@ -235,3 +235,21 @@ func TestDeliverFile(t *testing.T) {
 	// Clean up
 	os.Remove(filePath)
 }
+
+func TestDeliverClipboard(t *testing.T) {
+	content := "# Code Review\n\nTest content for clipboard"
+	target := OutputTarget{
+		Kind:  TargetClipboard,
+		Label: "System clipboard",
+	}
+
+	msg, err := Deliver(target, content)
+	if err != nil {
+		t.Fatalf("Deliver failed: %v", err)
+	}
+
+	// Check that message indicates OSC 52 was used
+	if !strings.Contains(msg, "OSC 52") {
+		t.Errorf("message %q does not mention OSC 52", msg)
+	}
+}
