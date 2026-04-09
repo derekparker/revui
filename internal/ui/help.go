@@ -35,6 +35,7 @@ func RenderHelp() string {
 		"\n" +
 		"Actions\n" +
 		"  ZZ          Finish review (choose output destination)\n" +
+		"              • Clipboard uses OSC 52 (works over SSH)\n" +
 		"  q           Quit without copying\n" +
 		"  ?           Toggle this help\n" +
 		"\n" +
