@@ -253,3 +253,38 @@ func TestDeliverClipboard(t *testing.T) {
 		t.Errorf("message %q does not mention OSC 52", msg)
 	}
 }
+
+func TestDeliverClipboardEmpty(t *testing.T) {
+	content := ""
+	target := OutputTarget{
+		Kind:  TargetClipboard,
+		Label: "System clipboard",
+	}
+
+	msg, err := Deliver(target, content)
+	if err != nil {
+		t.Fatalf("Deliver with empty content failed: %v", err)
+	}
+
+	if !strings.Contains(msg, "OSC 52") {
+		t.Errorf("message %q does not mention OSC 52", msg)
+	}
+}
+
+func TestDeliverClipboardLarge(t *testing.T) {
+	// Create 50KB of content (well within typical OSC 52 limits)
+	content := strings.Repeat("# Code Review Comment\n", 2000)
+	target := OutputTarget{
+		Kind:  TargetClipboard,
+		Label: "System clipboard",
+	}
+
+	msg, err := Deliver(target, content)
+	if err != nil {
+		t.Fatalf("Deliver with large content failed: %v", err)
+	}
+
+	if !strings.Contains(msg, "OSC 52") {
+		t.Errorf("message %q does not mention OSC 52", msg)
+	}
+}
