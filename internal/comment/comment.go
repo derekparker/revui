@@ -4,11 +4,11 @@ import "github.com/deparker/revui/internal/git"
 
 // Comment represents an inline review comment on a diff.
 type Comment struct {
-	FilePath    string
-	StartLine   int
-	EndLine     int
-	LineType    git.LineType
-	Body        string
+	FilePath  string
+	StartLine int
+	EndLine   int
+	LineType  git.LineType
+	Body      string
 }
 
 type commentKey struct {

@@ -287,7 +287,7 @@ func TestRefreshCmd(t *testing.T) {
 func TestRefreshCmdEmptyFileList(t *testing.T) {
 	mock := &dynamicMockGitRunner{
 		filesResults: [][]git.ChangedFile{
-			{}, // constructor gets empty list
+			{},                            // constructor gets empty list
 			{{Path: "a.go", Status: "A"}}, // refresh finds a new file
 		},
 		diffs: map[string]*git.FileDiff{},

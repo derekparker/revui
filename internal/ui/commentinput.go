@@ -15,11 +15,11 @@ var commentInputStyle = lipgloss.NewStyle().
 
 // CommentSubmitMsg is sent when the user submits a comment.
 type CommentSubmitMsg struct {
-	FilePath    string
-	LineNo      int
-	EndLineNo   int
-	Body        string
-	LineType    git.LineType
+	FilePath  string
+	LineNo    int
+	EndLineNo int
+	Body      string
+	LineType  git.LineType
 }
 
 // CommentCancelMsg is sent when the user cancels comment input.
@@ -27,13 +27,13 @@ type CommentCancelMsg struct{}
 
 // CommentInput is a sub-model for entering review comments.
 type CommentInput struct {
-	input       textinput.Model
-	active      bool
-	filePath    string
-	lineNo      int
-	endLineNo   int
-	lineType    git.LineType
-	width       int
+	input     textinput.Model
+	active    bool
+	filePath  string
+	lineNo    int
+	endLineNo int
+	lineType  git.LineType
+	width     int
 }
 
 // NewCommentInput creates a new comment input component.

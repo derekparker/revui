@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-revui is a terminal-based code review tool for git diffs, built with Go and the Bubble Tea TUI framework. It provides vim-style navigation, side-by-side and unified diff views, inline commenting, and copies formatted markdown to clipboard on finish — designed for pasting review comments into AI coding assistants.
+revui is a terminal-based code review tool for git diffs, built with Go and the Bubble Tea TUI framework. It provides vim-style navigation, side-by-side and unified diff views, inline commenting, and multiple output options (tmux integration, clipboard, file) — designed for pasting review comments into AI coding assistants.
 
 ## Commands
 
@@ -36,9 +36,10 @@ The app follows Bubble Tea's composable model pattern. Each UI component impleme
 
 **Package structure:**
 
-- `cmd/revui/` — Entry point. Parses flags, validates git repo, auto-detects base branch, runs the TUI, copies comments to clipboard on finish (`ZZ`).
+- `cmd/revui/` — Entry point. Parses flags, validates git repo, auto-detects base branch, runs the TUI.
 - `internal/git/` — Git operations via `os/exec`. `Runner` shells out to git; `parse.go` parses unified diff output into structured types (`FileDiff` → `Hunk` → `Line`). The `GitRunner` interface (defined in `internal/ui/root.go`) enables mock-based testing.
 - `internal/comment/` — In-memory `Store` for review comments with O(1) lookup by file+line via map index. `format.go` renders comments as markdown.
+- `internal/output/` — Output delivery to multiple targets. Detects tmux environment, can send to Claude panes via tmux, tmux paste buffer, system clipboard, or file.
 - `internal/ui/` — All TUI components:
   - `root.go` — `RootModel` orchestrates focus routing between `FileList`, `DiffViewer`, and `CommentInput`. Handles global keys (Tab for view toggle, `ZZ` to finish, `q` to quit).
   - `filelist.go` — Left panel file list with j/k navigation.
@@ -47,7 +48,7 @@ The app follows Bubble Tea's composable model pattern. Each UI component impleme
   - `commentinput.go` — Modal text input overlay.
   - `help.go` — Help overlay (`?`).
 
-**Data flow:** `main.go` → `RootModel` → routes keys to focused sub-model → `DiffViewer` calls `GitRunner` to lazy-load diffs per file → comments stored in `comment.Store` → on `ZZ`, `comment.Format()` produces markdown → copied to clipboard.
+**Data flow:** `main.go` → `RootModel` → routes keys to focused sub-model → `DiffViewer` calls `GitRunner` to lazy-load diffs per file → comments stored in `comment.Store` → on `ZZ`, `comment.Format()` produces markdown → `OutputSelector` presents available targets (Claude panes, tmux buffer, clipboard, file) → `output.Deliver()` sends to chosen target.
 
 ## Key Conventions
 
@@ -58,4 +59,4 @@ The app follows Bubble Tea's composable model pattern. Each UI component impleme
 
 ## Keybindings Reference
 
-`j/k` navigate, `Tab` toggles unified/side-by-side, `v` enters visual mode, `c` adds comment, `]c/[c` next/prev comment, `/` search, `ZZ` finish (copy to clipboard), `q` quit, `?` help.
+`j/k` navigate, `Tab` toggles unified/side-by-side, `v` enters visual mode, `c` adds comment, `]c/[c` next/prev comment, `/` search, `ZZ` finish (choose output target), `q` quit, `?` help.

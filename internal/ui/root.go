@@ -57,24 +57,24 @@ type refreshResultMsg struct {
 
 // RootModel is the top-level Bubble Tea model.
 type RootModel struct {
-	git           GitRunner
-	mode          reviewMode
-	base          string
-	branch        string
-	files         []git.ChangedFile
-	fileList      FileList
-	diffViewer    DiffViewer
-	commentInput  CommentInput
-	comments      *comment.Store
-	focus         focusArea
-	width         int
-	height        int
-	err           error
-	quitting      bool
-	finished      bool
-	output        string // formatted comments for clipboard
-	fileListWidth int
-	pendingZ      bool
+	git               GitRunner
+	mode              reviewMode
+	base              string
+	branch            string
+	files             []git.ChangedFile
+	fileList          FileList
+	diffViewer        DiffViewer
+	commentInput      CommentInput
+	comments          *comment.Store
+	focus             focusArea
+	width             int
+	height            int
+	err               error
+	quitting          bool
+	finished          bool
+	output            string // formatted comments for clipboard
+	fileListWidth     int
+	pendingZ          bool
 	showHelp          bool
 	searchInput       textinput.Model
 	searching         bool
