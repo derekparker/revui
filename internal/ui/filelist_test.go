@@ -149,3 +149,93 @@ func TestFileListViewNotEmpty(t *testing.T) {
 		t.Error("expected non-empty view")
 	}
 }
+
+func TestFileListPathWrapping(t *testing.T) {
+	files := []git.ChangedFile{
+		{Path: "short.go", Status: "A"},
+		{Path: "some/moderately/long/directory/path/medium.go", Status: "M"},
+		{Path: "this/is/a/very/long/path/that/should/definitely/wrap/across/multiple/lines/long.go", Status: "D"},
+	}
+
+	t.Run("short path fits on one line", func(t *testing.T) {
+		fl := NewFileList([]git.ChangedFile{files[0]}, 40, 10)
+		view := fl.View()
+		// Count lines - should be 1
+		lines := countLines(view)
+		if lines != 1 {
+			t.Errorf("short path has %d lines, want 1. View:\n%q", lines, view)
+		}
+	})
+
+	t.Run("medium path wraps to multiple lines", func(t *testing.T) {
+		fl := NewFileList([]git.ChangedFile{files[1]}, 40, 10)
+		view := fl.View()
+		lines := countLines(view)
+		if lines < 2 {
+			t.Errorf("medium path has %d lines, want >= 2. View:\n%q", lines, view)
+		}
+	})
+
+	t.Run("long path wraps to multiple lines", func(t *testing.T) {
+		fl := NewFileList([]git.ChangedFile{files[2]}, 40, 10)
+		view := fl.View()
+		lines := countLines(view)
+		if lines < 3 {
+			t.Errorf("long path has %d lines, want >= 3. View:\n%q", lines, view)
+		}
+	})
+
+	t.Run("continuation lines indented properly", func(t *testing.T) {
+		fl := NewFileList([]git.ChangedFile{files[2]}, 40, 10)
+		view := fl.View()
+		lines := splitLines(view)
+		if len(lines) < 2 {
+			t.Fatal("expected at least 2 lines")
+		}
+		// Second line should start with 4 spaces for indentation
+		if len(lines[1]) > 0 && lines[1][0:4] != "    " {
+			t.Errorf("continuation line not indented: %q", lines[1])
+		}
+	})
+
+	t.Run("wider width reduces wrapping", func(t *testing.T) {
+		fl40 := NewFileList([]git.ChangedFile{files[2]}, 40, 10)
+		view40 := fl40.View()
+		lines40 := countLines(view40)
+
+		fl100 := NewFileList([]git.ChangedFile{files[2]}, 100, 10)
+		view100 := fl100.View()
+		lines100 := countLines(view100)
+
+		if lines100 >= lines40 {
+			t.Errorf("wider width (100) produced %d lines, narrower (40) produced %d lines", lines100, lines40)
+		}
+	})
+}
+
+func countLines(s string) int {
+	lines := 0
+	for _, ch := range s {
+		if ch == '\n' {
+			lines++
+		}
+	}
+	return lines
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	var current []rune
+	for _, ch := range s {
+		if ch == '\n' {
+			lines = append(lines, string(current))
+			current = nil
+		} else {
+			current = append(current, ch)
+		}
+	}
+	if len(current) > 0 {
+		lines = append(lines, string(current))
+	}
+	return lines
+}

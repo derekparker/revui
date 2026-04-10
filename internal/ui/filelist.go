@@ -75,19 +75,50 @@ func (fl FileList) View() string {
 	var b strings.Builder
 	for i, f := range fl.files {
 		icon := statusIcon(f.Status)
-		line := icon + " " + f.Path
 
-		if i == fl.cursor {
-			if fl.focused {
-				line = selectedStyle.Render("▸ " + line)
-			} else {
-				line = selectedUnfocusedStyle.Render("▸ " + line)
-			}
-		} else {
-			line = unselectedStyle.Render("  " + line)
+		// Calculate available width for path (sidebar width - prefix length)
+		// Prefix: "▸ " (2) + icon (1) + " " (1) = 4 chars
+		availableWidth := fl.width - 4
+		if availableWidth < 1 {
+			availableWidth = 1 // Minimum width
 		}
-		b.WriteString(line)
-		b.WriteByte('\n')
+
+		// Create wrapping style for path
+		pathStyle := lipgloss.NewStyle().Width(availableWidth)
+		wrappedPath := pathStyle.Render(f.Path)
+
+		// Split into lines
+		lines := strings.Split(wrappedPath, "\n")
+
+		// Build the complete entry with proper prefixes
+		for lineIdx, pathLine := range lines {
+			var prefix string
+			if lineIdx == 0 {
+				// First line: add arrow/indent + icon + space
+				if i == fl.cursor {
+					prefix = "▸ " + icon + " "
+				} else {
+					prefix = "  " + icon + " "
+				}
+			} else {
+				// Continuation lines: indent to align with path text
+				prefix = "    " // 4 spaces to align with first line text
+			}
+
+			line := prefix + pathLine
+
+			// Apply selection styling
+			if i == fl.cursor {
+				if fl.focused {
+					line = selectedStyle.Render(line)
+				} else {
+					line = selectedUnfocusedStyle.Render(line)
+				}
+			}
+
+			b.WriteString(line)
+			b.WriteByte('\n')
+		}
 	}
 	return b.String()
 }
