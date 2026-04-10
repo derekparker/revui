@@ -309,6 +309,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searching = false
 				m.searchInput.Blur()
 				m.diffViewer.SetSearch(term)
+				// Jump to first match (vim-style behavior)
+				if len(m.diffViewer.SearchMatches()) > 0 {
+					// Simulate pressing 'n' to jump to first match
+					m.diffViewer, _ = m.diffViewer.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+				}
 				return m, nil
 			}
 			var cmd tea.Cmd

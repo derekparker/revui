@@ -99,14 +99,17 @@ func (dv *DiffViewer) SetDiff(fd *git.FileDiff) {
 
 // RefreshDiff updates the diff content while preserving cursor and scroll position.
 // Cursor and scroll offset are clamped if the new diff is shorter.
-// Visual mode, search matches, and pending bracket state are cleared since the
-// underlying line indices are no longer valid after a refresh.
+// Visual mode and pending bracket state are cleared since the underlying line indices
+// are no longer valid after a refresh. Search matches are recomputed if there's an
+// active search term.
 func (dv *DiffViewer) RefreshDiff(fd *git.FileDiff) {
 	dv.diff = fd
 	dv.lines = dv.flattenLines()
 	dv.visualMode = false
-	dv.searchMatches = nil
 	dv.pendingBracket = 0
+
+	// Recompute search matches if there's an active search
+	dv.computeMatches()
 
 	if len(dv.lines) == 0 {
 		dv.cursor = 0
@@ -656,18 +659,23 @@ func (dv DiffViewer) IsSideBySide() bool {
 	return dv.sideBySide
 }
 
-// SetSearch sets the search term and computes matches.
-func (dv *DiffViewer) SetSearch(term string) {
-	dv.searchTerm = term
+// computeMatches searches through all lines and populates searchMatches based on searchTerm.
+func (dv *DiffViewer) computeMatches() {
 	dv.searchMatches = nil
-	if term == "" {
+	if dv.searchTerm == "" {
 		return
 	}
 	for i, dl := range dv.lines {
-		if dl.line != nil && strings.Contains(dl.line.Content, term) {
+		if dl.line != nil && strings.Contains(dl.line.Content, dv.searchTerm) {
 			dv.searchMatches = append(dv.searchMatches, i)
 		}
 	}
+}
+
+// SetSearch sets the search term and computes matches.
+func (dv *DiffViewer) SetSearch(term string) {
+	dv.searchTerm = term
+	dv.computeMatches()
 }
 
 // SearchMatches returns the indices of lines matching the search term.

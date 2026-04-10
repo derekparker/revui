@@ -146,13 +146,175 @@ func TestDiffViewCommentNavigation(t *testing.T) {
 }
 
 func TestDiffViewSearch(t *testing.T) {
+	tests := []struct {
+		name          string
+		searchTerm    string
+		wantMatches   int
+		wantIndices   []int
+		caseSensitive bool
+	}{
+		{
+			name:        "finds multiple matches",
+			searchTerm:  "new",
+			wantMatches: 2,
+			wantIndices: []int{3, 4}, // "new line" at 3, "another new" at 4
+		},
+		{
+			name:        "finds single match",
+			searchTerm:  "old",
+			wantMatches: 1,
+			wantIndices: []int{2}, // "old line" at 2
+		},
+		{
+			name:        "no matches found",
+			searchTerm:  "nonexistent",
+			wantMatches: 0,
+			wantIndices: []int{},
+		},
+		{
+			name:        "empty search term",
+			searchTerm:  "",
+			wantMatches: 0,
+			wantIndices: []int{},
+		},
+		{
+			name:        "case sensitive - uppercase doesn't match",
+			searchTerm:  "NEW",
+			wantMatches: 0,
+			wantIndices: []int{},
+		},
+		{
+			name:        "hunk headers not searched",
+			searchTerm:  "@@",
+			wantMatches: 0,
+			wantIndices: []int{}, // hunk header line is excluded from search
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dv := NewDiffViewer(80, 20)
+			dv.SetDiff(makeTestDiff())
+
+			dv.SetSearch(tt.searchTerm)
+			matches := dv.SearchMatches()
+
+			if len(matches) != tt.wantMatches {
+				t.Errorf("got %d matches, want %d", len(matches), tt.wantMatches)
+			}
+
+			if len(matches) > 0 {
+				for i, idx := range tt.wantIndices {
+					if i >= len(matches) || matches[i] != idx {
+						t.Errorf("match %d: got index %v, want %d", i, matches, idx)
+						break
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDiffViewSearchNavigation(t *testing.T) {
 	dv := NewDiffViewer(80, 20)
 	dv.SetDiff(makeTestDiff())
 
-	dv.SetSearch("new line")
+	// Search for "new" - matches at indices 3 and 4
+	dv.SetSearch("new")
 	matches := dv.SearchMatches()
-	if len(matches) == 0 {
-		t.Error("expected search matches")
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matches, got %d", len(matches))
+	}
+
+	// Initial cursor at 0
+	if dv.CursorLine() != 0 {
+		t.Fatalf("initial cursor = %d, want 0", dv.CursorLine())
+	}
+
+	// Forward navigation with 'n'
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if dv.CursorLine() != matches[0] {
+		t.Errorf("after first 'n': cursor = %d, want %d", dv.CursorLine(), matches[0])
+	}
+
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if dv.CursorLine() != matches[1] {
+		t.Errorf("after second 'n': cursor = %d, want %d", dv.CursorLine(), matches[1])
+	}
+
+	// Wrap forward to first match
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if dv.CursorLine() != matches[0] {
+		t.Errorf("after wrap 'n': cursor = %d, want %d", dv.CursorLine(), matches[0])
+	}
+
+	// Backward navigation with 'N'
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
+	if dv.CursorLine() != matches[1] {
+		t.Errorf("after 'N' from first match: cursor = %d, want %d", dv.CursorLine(), matches[1])
+	}
+
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
+	if dv.CursorLine() != matches[0] {
+		t.Errorf("after 'N' to first match: cursor = %d, want %d", dv.CursorLine(), matches[0])
+	}
+
+	// Wrap backward to last match
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
+	if dv.CursorLine() != matches[1] {
+		t.Errorf("after wrap 'N': cursor = %d, want %d", dv.CursorLine(), matches[1])
+	}
+}
+
+func TestDiffViewSearchNoMatches(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	dv.SetSearch("nonexistent")
+	if len(dv.SearchMatches()) != 0 {
+		t.Error("expected no matches for nonexistent term")
+	}
+
+	// Pressing 'n' or 'N' should do nothing when no matches
+	initialCursor := dv.CursorLine()
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if dv.CursorLine() != initialCursor {
+		t.Errorf("cursor moved on 'n' with no matches: got %d, want %d", dv.CursorLine(), initialCursor)
+	}
+
+	dv, _ = dv.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'N'}})
+	if dv.CursorLine() != initialCursor {
+		t.Errorf("cursor moved on 'N' with no matches: got %d, want %d", dv.CursorLine(), initialCursor)
+	}
+}
+
+// TestRefreshDiffPreservesSearch tests that RefreshDiff recomputes search matches
+// when there's an active search term (important for uncommitted mode auto-refresh).
+func TestRefreshDiffPreservesSearch(t *testing.T) {
+	dv := NewDiffViewer(80, 20)
+	dv.SetDiff(makeTestDiff())
+
+	// Set up a search
+	dv.SetSearch("new")
+	if len(dv.SearchMatches()) != 2 {
+		t.Fatalf("initial search: expected 2 matches, got %d", len(dv.SearchMatches()))
+	}
+
+	// Simulate auto-refresh with the same diff
+	dv.RefreshDiff(makeTestDiff())
+
+	// Search matches should be recomputed
+	if len(dv.SearchMatches()) != 2 {
+		t.Errorf("after refresh: expected 2 matches, got %d", len(dv.SearchMatches()))
+	}
+
+	// Clear search and refresh again
+	dv.SetSearch("")
+	dv.RefreshDiff(makeTestDiff())
+
+	// No matches when search is cleared
+	if len(dv.SearchMatches()) != 0 {
+		t.Errorf("after clearing search: expected 0 matches, got %d", len(dv.SearchMatches()))
 	}
 }
 
