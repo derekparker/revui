@@ -78,10 +78,7 @@ func (fl FileList) View() string {
 
 		// Calculate available width for path (sidebar width - prefix length)
 		// Prefix: "▸ " (2) + icon (1) + " " (1) = 4 chars
-		availableWidth := fl.width - 4
-		if availableWidth < 1 {
-			availableWidth = 1 // Minimum width
-		}
+		availableWidth := max(1, fl.width-4)
 
 		// Create wrapping style for path
 		pathStyle := lipgloss.NewStyle().Width(availableWidth)
@@ -114,6 +111,8 @@ func (fl FileList) View() string {
 				} else {
 					line = selectedUnfocusedStyle.Render(line)
 				}
+			} else {
+				line = unselectedStyle.Render(line)
 			}
 
 			b.WriteString(line)
