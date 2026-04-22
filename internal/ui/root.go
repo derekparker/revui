@@ -361,7 +361,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.pendingZ = false
 
 	switch key {
-	case "ctrl+h":
+	case "e":
 		m.hideFileList = !m.hideFileList
 		if m.hideFileList && m.focus == focusFileList {
 			m.focus = focusDiffViewer

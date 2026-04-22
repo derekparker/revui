@@ -545,25 +545,25 @@ func TestFileListToggle_InitiallyVisible(t *testing.T) {
 	}
 }
 
-func TestFileListToggle_CtrlHHides(t *testing.T) {
+func TestFileListToggle_EHides(t *testing.T) {
 	m := newTestRoot()
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	if !m.hideFileList {
-		t.Error("ctrl+h should set hideFileList = true")
+		t.Error("e should set hideFileList = true")
 	}
 }
 
-func TestFileListToggle_CtrlHToggles(t *testing.T) {
+func TestFileListToggle_EToggles(t *testing.T) {
 	m := newTestRoot()
 	// Hide
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	// Show again
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	if m.hideFileList {
-		t.Error("second ctrl+h should restore hideFileList = false")
+		t.Error("second e should restore hideFileList = false")
 	}
 }
 
@@ -573,7 +573,7 @@ func TestFileListToggle_FocusShiftsWhenFileListFocused(t *testing.T) {
 	if m.focus != focusFileList {
 		t.Fatal("expected initial focus on file list")
 	}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	if m.focus != focusDiffViewer {
 		t.Error("hiding file list while focused should shift focus to diff viewer")
@@ -588,7 +588,7 @@ func TestFileListToggle_FocusUnchangedWhenDiffFocused(t *testing.T) {
 	if m.focus != focusDiffViewer {
 		t.Fatal("expected focus on diff viewer")
 	}
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	if m.focus != focusDiffViewer {
 		t.Error("focus should remain on diff viewer when hiding file list from diff viewer")
@@ -600,7 +600,7 @@ func TestFileListToggle_HKeyNoOpWhenHidden(t *testing.T) {
 	// Switch to diff viewer, then hide file list
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
 	m = updated.(RootModel)
-	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
 	m = updated.(RootModel)
 	if m.focus != focusDiffViewer {
 		t.Fatal("expected focus on diff viewer")
