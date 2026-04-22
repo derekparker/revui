@@ -537,3 +537,111 @@ func TestRootOutputSelectorViewRendered(t *testing.T) {
 		t.Error("view should contain output selector title")
 	}
 }
+
+func TestFileListToggle_InitiallyVisible(t *testing.T) {
+	m := newTestRoot()
+	if m.hideFileList {
+		t.Error("file list should be visible by default")
+	}
+}
+
+func TestFileListToggle_CtrlHHides(t *testing.T) {
+	m := newTestRoot()
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	if !m.hideFileList {
+		t.Error("ctrl+h should set hideFileList = true")
+	}
+}
+
+func TestFileListToggle_CtrlHToggles(t *testing.T) {
+	m := newTestRoot()
+	// Hide
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	// Show again
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	if m.hideFileList {
+		t.Error("second ctrl+h should restore hideFileList = false")
+	}
+}
+
+func TestFileListToggle_FocusShiftsWhenFileListFocused(t *testing.T) {
+	m := newTestRoot()
+	// Initial focus is on file list
+	if m.focus != focusFileList {
+		t.Fatal("expected initial focus on file list")
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Error("hiding file list while focused should shift focus to diff viewer")
+	}
+}
+
+func TestFileListToggle_FocusUnchangedWhenDiffFocused(t *testing.T) {
+	m := newTestRoot()
+	// Move focus to diff viewer first
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Fatal("expected focus on diff viewer")
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Error("focus should remain on diff viewer when hiding file list from diff viewer")
+	}
+}
+
+func TestFileListToggle_HKeyNoOpWhenHidden(t *testing.T) {
+	m := newTestRoot()
+	// Switch to diff viewer, then hide file list
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = updated.(RootModel)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlH})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Fatal("expected focus on diff viewer")
+	}
+	// h should not shift focus to hidden file list
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = updated.(RootModel)
+	if m.focus != focusDiffViewer {
+		t.Error("h should be no-op when file list is hidden")
+	}
+}
+
+func TestFileListToggle_DiffViewerWidthHelper(t *testing.T) {
+	m := newTestRoot()
+	// m.width = 80, m.fileListWidth = 30, border = 3
+	wantVisible := 80 - 30 - 3
+	wantHidden := 80
+
+	if got := m.diffViewerWidth(); got != wantVisible {
+		t.Errorf("diffViewerWidth() visible = %d, want %d", got, wantVisible)
+	}
+
+	m.hideFileList = true
+	if got := m.diffViewerWidth(); got != wantHidden {
+		t.Errorf("diffViewerWidth() hidden = %d, want %d", got, wantHidden)
+	}
+}
+
+func TestFileListToggle_ViewOmitsFileListWhenHidden(t *testing.T) {
+	m := newTestRoot()
+
+	// When visible, the file list cursor arrow is present
+	view := m.View()
+	if !strings.Contains(view, "▸") {
+		t.Error("visible file list should contain cursor arrow ▸")
+	}
+
+	// When hidden, the file list is not rendered
+	m.hideFileList = true
+	view = m.View()
+	if strings.Contains(view, "▸") {
+		t.Error("hidden file list should not render cursor arrow ▸")
+	}
+}

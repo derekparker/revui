@@ -30,6 +30,7 @@ func RenderHelp() string {
 		"\n" +
 		"Views\n" +
 		"  Tab         Toggle unified/side-by-side view\n" +
+		"  Ctrl+h      Toggle file list\n" +
 		"  /           Search in diff\n" +
 		"  n/N         Next/prev search result\n" +
 		"\n" +
