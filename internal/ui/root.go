@@ -74,6 +74,7 @@ type RootModel struct {
 	finished          bool
 	output            string // formatted comments for clipboard
 	fileListWidth     int
+	hideFileList      bool
 	pendingZ          bool
 	showHelp          bool
 	searchInput       textinput.Model
@@ -183,7 +184,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.fileList.SetSize(m.fileListWidth, m.height-2)
-		m.diffViewer.SetSize(m.width-m.fileListWidth-3, m.height-2)
+		m.diffViewer.SetSize(m.diffViewerWidth(), m.height-2)
 		m.commentInput.SetWidth(m.width)
 		return m, nil
 
@@ -360,6 +361,14 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.pendingZ = false
 
 	switch key {
+	case "e":
+		m.hideFileList = !m.hideFileList
+		if m.hideFileList && m.focus == focusFileList {
+			m.focus = focusDiffViewer
+		}
+		m.diffViewer.SetSize(m.diffViewerWidth(), m.height-2)
+		return m, nil
+
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
@@ -390,7 +399,7 @@ func (m RootModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "h":
-		if m.focus == focusDiffViewer {
+		if m.focus == focusDiffViewer && !m.hideFileList {
 			m.focus = focusFileList
 		}
 		return m, nil
@@ -513,6 +522,15 @@ func (m *RootModel) loadFileDiff(path string) (*git.FileDiff, error) {
 	return m.git.FileDiff(m.base, path)
 }
 
+// diffViewerWidth returns the width for the diff viewer panel.
+// When the file list is hidden it gets the full terminal width.
+func (m RootModel) diffViewerWidth() int {
+	if m.hideFileList {
+		return m.width
+	}
+	return m.width - m.fileListWidth - 3
+}
+
 const refreshInterval = 2 * time.Second
 
 // scheduleRefreshTick returns a tea.Cmd that sends a tickRefreshMsg after the refresh interval.
@@ -589,23 +607,25 @@ func (m RootModel) View() string {
 	m.fileList.focused = m.focus == focusFileList
 	m.diffViewer.focused = m.focus == focusDiffViewer
 
-	// File list panel
-	fileListPanel := lipgloss.NewStyle().
-		Width(m.fileListWidth).
-		Height(m.height - 3).
-		BorderRight(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Render(m.fileList.View())
-
-	// Diff viewer panel
+	// Diff viewer panel — expands to full width when file list is hidden
 	diffPanel := lipgloss.NewStyle().
-		Width(m.width - m.fileListWidth - 3).
+		Width(m.diffViewerWidth()).
 		Height(m.height - 3).
 		Render(m.diffViewer.View())
 
-	// Main content
-	content := lipgloss.JoinHorizontal(lipgloss.Top, fileListPanel, diffPanel)
+	var content string
+	if m.hideFileList {
+		content = diffPanel
+	} else {
+		fileListPanel := lipgloss.NewStyle().
+			Width(m.fileListWidth).
+			Height(m.height - 3).
+			BorderRight(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Render(m.fileList.View())
+		content = lipgloss.JoinHorizontal(lipgloss.Top, fileListPanel, diffPanel)
+	}
 	b.WriteString(content)
 	b.WriteString("\n")
 
@@ -624,7 +644,7 @@ func (m RootModel) View() string {
 
 func (m RootModel) renderStatusBar() string {
 	commentCount := len(m.comments.All())
-	status := fmt.Sprintf(" [c]omment  [v]isual  [Tab]view  [q]uit  [ZZ]done  [?]help  │  %d comments", commentCount)
+	status := fmt.Sprintf(" [c]omment  [v]isual  [Tab]view  [e]files  [q]uit  [ZZ]done  [?]help  │  %d comments", commentCount)
 
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
