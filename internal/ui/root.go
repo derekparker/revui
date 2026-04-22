@@ -644,7 +644,7 @@ func (m RootModel) View() string {
 
 func (m RootModel) renderStatusBar() string {
 	commentCount := len(m.comments.All())
-	status := fmt.Sprintf(" [c]omment  [v]isual  [Tab]view  [q]uit  [ZZ]done  [?]help  │  %d comments", commentCount)
+	status := fmt.Sprintf(" [c]omment  [v]isual  [Tab]view  [e]files  [q]uit  [ZZ]done  [?]help  │  %d comments", commentCount)
 
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")).
